@@ -773,7 +773,7 @@ export const praterLine: Story = {
         { field: 'volkov_suspicion', op: 'gte', value: '4' },
       ],
       body:
-        'The doors close. The platform slides away. The steel canister in your coat is light as a lie — because that is what it is. The decoy. Engine schematics, real and worthless, the only thing Irina Dragomir ever trusted you with.\n\n' +
+        'The doors close. The platform slides away. Whatever you carry now — the decoy she shoved across the marble, or nothing at all — it weighs the same: nothing. You never earned the real film.\n\n' +
         'She never handed you the real film. You never gave her reason to. Whether she is sitting across from you now, watching the dark city let you go, or whether the wet streets swallowed her the moment you stopped being worth following — the failure is the same. You never earned the real film. You never earned the right to carry her out.\n\n' +
         'And somewhere back in Vienna, Volkov\'s net has finished drawing closed around a frightened physicist who ran out of people to believe in. You\'ll read about it, or you won\'t; either way it is no longer yours to fix.\n\n' +
         'The conductor passes, checking his borrowed watch. Salzburg by dawn. A debrief. A quiet conversation about what went wrong, in which no one will quite say it was you.\n\n' +

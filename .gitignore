@@ -2,3 +2,6 @@ node_modules/
 dist/
 coverage/
 *.log
+
+# Netlify CLI local state (links this folder to the deployed site)
+.netlify/

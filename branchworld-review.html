@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BranchWorld Engine — Triple-Team Chapter-One Review</title>
+<style>
+  :root{
+    --bg:#14110f; --panel:#1d1916; --panel2:#241f1b; --ink:#ece4d8; --muted:#a79b8b;
+    --line:#3a322b; --accent:#c98a3c; --accent2:#7fb0a3; --paper:#f3ead9;
+    --go:#6fbf73; --warn:#d9a23b; --bad:#d96b5e;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+    background-image:radial-gradient(1200px 600px at 80% -10%, rgba(201,138,60,.10), transparent 60%);}
+  a{color:var(--accent)}
+  header.top{padding:34px 22px 22px;max-width:1040px;margin:0 auto}
+  .kicker{letter-spacing:.32em;text-transform:uppercase;font-size:11px;color:var(--accent);margin-bottom:10px}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(28px,5vw,46px);line-height:1.08;margin:.1em 0 .35em}
+  .sub{color:var(--muted);max-width:70ch}
+  nav.tabs{position:sticky;top:0;z-index:20;background:rgba(20,17,15,.92);backdrop-filter:blur(8px);
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:22px}
+  nav.tabs .wrap{max-width:1040px;margin:0 auto;display:flex;gap:4px;padding:6px 14px;overflow-x:auto}
+  nav.tabs button{appearance:none;background:transparent;border:0;color:var(--muted);font:inherit;
+    font-size:14px;padding:12px 14px;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}
+  nav.tabs button:hover{color:var(--ink)}
+  nav.tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
+  main{max-width:1040px;margin:0 auto;padding:30px 22px 90px}
+  section.view{display:none;animation:fade .25s ease}
+  section.view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  h2{font-family:var(--serif);font-weight:600;font-size:26px;margin:34px 0 6px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  h3{font-family:var(--serif);font-weight:600;font-size:19px;margin:22px 0 6px;color:#f0e8da}
+  p{margin:.5em 0}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .panel.quiet{background:var(--panel2)}
+  .lead{font-family:var(--serif);font-size:20px;line-height:1.5}
+  .chip{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    padding:3px 9px;border-radius:999px;border:1px solid;vertical-align:middle}
+  .chip.go{color:var(--go);border-color:rgba(111,191,115,.5);background:rgba(111,191,115,.10)}
+  .chip.warn{color:var(--warn);border-color:rgba(217,162,59,.5);background:rgba(217,162,59,.10)}
+  .chip.bad{color:var(--bad);border-color:rgba(217,107,94,.5);background:rgba(217,107,94,.10)}
+  .chip.muted{color:var(--muted);border-color:var(--line)}
+  ul.clean{list-style:none;padding:0;margin:10px 0}
+  ul.clean li{padding:10px 0 10px 26px;position:relative;border-bottom:1px solid var(--line)}
+  ul.clean li:last-child{border-bottom:0}
+  ul.clean li::before{content:"";position:absolute;left:4px;top:18px;width:7px;height:7px;border-radius:2px;background:var(--accent);transform:rotate(45deg)}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  .meta{color:var(--muted);font-size:13px}
+  .tag{display:inline-block;font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin:2px 4px 2px 0}
+  .pri{font-weight:700;font-family:var(--sans);font-size:12px;border-radius:6px;padding:2px 8px;margin-right:8px}
+  .pri.P0{color:#1a120c;background:var(--bad)}
+  .pri.P1{color:#1a120c;background:var(--warn)}
+  .pri.P2{color:#1a120c;background:var(--accent2)}
+  .change{border-left:3px solid var(--line);padding:6px 0 6px 14px;margin:12px 0}
+  .change.P0{border-left-color:var(--bad)} .change.P1{border-left-color:var(--warn)} .change.P2{border-left-color:var(--accent2)}
+  .feat-strong{color:var(--go);font-weight:700} .feat-mixed{color:var(--warn);font-weight:700} .feat-weak{color:var(--bad);font-weight:700}
+  blockquote{margin:14px 0;padding:10px 18px;border-left:3px solid var(--accent);background:var(--panel2);font-family:var(--serif);font-size:19px}
+  .premise-grid{display:grid;grid-template-columns:140px 1fr;gap:6px 16px;font-size:14.5px;margin-top:8px}
+  .premise-grid dt{color:var(--muted)} .premise-grid dd{margin:0}
+  .playbtn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#1a120c;font-weight:700;
+    border:0;border-radius:10px;padding:12px 18px;font-size:15px;cursor:pointer;margin:6px 0}
+  .playbtn:hover{filter:brightness(1.08)}
+  .sev-high{color:var(--bad);font-weight:700}.sev-medium{color:var(--warn);font-weight:700}.sev-low{color:var(--muted);font-weight:700}
+  /* ---- player ---- */
+  .player-wrap{display:none;margin:14px 0}
+  .player-wrap.open{display:block}
+  .screen{background:#100d0b;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+  .statusbar{display:flex;flex-wrap:wrap;gap:8px 18px;padding:10px 16px;background:#0b0908;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+  .statusbar b{color:var(--accent2);font-weight:600}
+  .stage{padding:22px 22px 8px}
+  .loc-time{display:flex;justify-content:space-between;color:var(--accent);font-size:12px;letter-spacing:.14em;text-transform:uppercase;border-bottom:1px dashed var(--line);padding-bottom:8px;margin-bottom:14px}
+  .nodebody{font-family:var(--serif);font-size:18px;line-height:1.62;white-space:pre-wrap}
+  .nodebody .ttl{display:block;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;font-family:var(--sans)}
+  .choices{padding:14px 22px 22px;display:flex;flex-direction:column;gap:10px}
+  .choice{text-align:left;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:13px 15px;font:inherit;font-size:15px;cursor:pointer;transition:.12s}
+  .choice:hover{border-color:var(--accent);background:var(--panel2);transform:translateX(2px)}
+  .choice .fx{display:block;color:var(--muted);font-size:12px;margin-top:5px}
+  .choice.locked{cursor:not-allowed;opacity:.55;border-style:dashed}
+  .choice.locked:hover{transform:none;border-color:var(--line);background:var(--panel)}
+  .choice.locked .why{display:block;color:var(--bad);font-size:11.5px;margin-top:5px}
+  .lock-ico{color:var(--bad);font-size:12px;margin-right:6px}
+  .ending-banner{background:linear-gradient(180deg,rgba(201,138,60,.16),transparent);padding:14px 22px;border-bottom:1px solid var(--line);font-family:var(--serif);font-size:15px;color:var(--accent)}
+  .player-controls{display:flex;gap:10px;padding:0 22px 18px;flex-wrap:wrap}
+  .pc{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px 13px;font:inherit;font-size:13px;cursor:pointer}
+  .pc:hover{color:var(--ink);border-color:var(--accent)}
+  .toggle{font-size:12.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+  .footnote{color:var(--muted);font-size:12.5px;margin-top:8px}
+  .divider{height:1px;background:var(--line);margin:30px 0}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="kicker">BranchWorld Engine · Concept Validation</div>
+  <h1>Triple-Team Chapter-One Review</h1>
+  <p class="sub">Three independent design rooms — each a <em>game designer → writer → playtester</em> chain — separately invented, wrote, and adversarially playtested a complete chapter one for the state-driven narrative engine. A showrunner reconciled their verdicts. Every team's chapter is <strong>clickable and playable</strong> below.</p>
+</header>
+<nav class="tabs"><div class="wrap" id="tabs"></div></nav>
+<main id="main"></main>
+
+<script src="./data.js"></script>
+<script>
+(function(){
+  var D = window.REPORT_DATA;
+  if(!D){ document.getElementById('main').innerHTML = '<p style="color:#d96b5e">Could not load data.js — make sure it sits next to this file.</p>'; return; }
+  var teams = D.teams || [];
+  var SY = D.synthesis || {};
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function callChip(call){
+    var map={go:['go','GO'],go_with_changes:['warn','GO — WITH CHANGES'],too_much:['bad','TOO MUCH']};
+    var m=map[call]||['muted',String(call||'?').toUpperCase()];
+    return '<span class="chip '+m[0]+'">'+m[1]+'</span>';
+  }
+  function heldSpan(h){ return '<span class="feat-'+esc(h)+'">'+esc(String(h||'').toUpperCase())+'</span>'; }
+
+  /* ---------------- OVERVIEW ---------------- */
+  function renderOverview(){
+    var ov=SY.overallVerdict||{};
+    var h='';
+    h+='<h2>Showrunner Verdict</h2>';
+    h+='<div class="panel"><div style="margin-bottom:10px">'+callChip(ov.call)+'</div>';
+    h+='<p class="lead">'+esc(ov.headline)+'</p>';
+    h+='<p>'+esc(ov.rationale)+'</p></div>';
+
+    h+='<h2>Where three isolated teams converged</h2>';
+    h+='<p class="meta">Independent rooms landing on the same point is the strongest signal in this whole exercise.</p>';
+    h+='<ul class="clean">'+(SY.convergence||[]).map(function(c){return '<li>'+esc(c)+'</li>';}).join('')+'</ul>';
+
+    h+='<h2>Where they diverged</h2>';
+    h+=(SY.divergence||[]).map(function(d){return '<div class="panel quiet"><h3>'+esc(d.topic)+'</h3><p>'+esc(d.positions)+'</p></div>';}).join('');
+
+    h+='<h2>Engine feature validation</h2>';
+    h+='<table><thead><tr><th>Feature</th><th>Held up</th><th>Notes</th></tr></thead><tbody>';
+    h+=(SY.engineValidation||[]).map(function(e){return '<tr><td><strong>'+esc(e.feature)+'</strong></td><td>'+heldSpan(e.held)+'</td><td>'+esc(e.notes)+'</td></tr>';}).join('');
+    h+='</tbody></table>';
+
+    h+='<h2>Prioritized changes</h2>';
+    ['P0','P1','P2'].forEach(function(pri){
+      var items=(SY.topChanges||[]).filter(function(x){return x.priority===pri;});
+      if(!items.length) return;
+      var label={P0:'Do before building',P1:'Soon',P2:'Later'}[pri];
+      h+='<h3><span class="pri '+pri+'">'+pri+'</span>'+label+'</h3>';
+      h+=items.map(function(it){
+        var src=it.sourceTeams?'<div class="meta">Raised by team(s): '+esc(it.sourceTeams)+'</div>':'';
+        return '<div class="change '+pri+'"><strong>'+esc(it.change)+'</strong><p>'+esc(it.why)+'</p>'+src+'</div>';
+      }).join('');
+    });
+
+    h+='<h2>Standout ideas worth keeping</h2>';
+    h+='<ul class="clean">'+(SY.standoutIdeas||[]).map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul>';
+
+    h+='<h2>Are we asking too much?</h2>';
+    h+='<blockquote>'+esc(SY.askingTooMuch)+'</blockquote>';
+
+    h+='<h2>Recommended next step</h2>';
+    h+='<div class="panel">'+esc(SY.recommendedNextStep)+'</div>';
+    return h;
+  }
+
+  /* ---------------- TEAM REPORT ---------------- */
+  function renderTeam(t){
+    var p=(t.design&&t.design.premise)||{}, d=t.design||{}, pt=t.playtest||{};
+    var h='';
+    h+='<h2>'+esc(p.title)+' &nbsp;'+callChip(pt.verdict&&pt.verdict.call)+'</h2>';
+    h+='<p class="meta">'+esc(p.genre)+'</p>';
+    h+='<blockquote>'+esc(p.logline)+'</blockquote>';
+    h+='<dl class="premise-grid">';
+    [['Setting',p.setting],['Protagonist',p.protagonist],['Tone',p.tone],['Core tension',p.coreTension],['The clock',p.clock]].forEach(function(r){
+      if(r[1]) h+='<dt>'+r[0]+'</dt><dd>'+esc(r[1])+'</dd>';
+    });
+    h+='</dl>';
+
+    h+='<button class="playbtn" data-play="'+t.team+'">▶ Play this chapter</button>';
+    h+='<div class="footnote">Live engine: choices appear/lock based on real world state. Greyed choices show <em>why</em> they\'re locked — the engine\'s debug ethos.</div>';
+    h+='<div class="player-wrap" id="player-'+t.team+'"></div>';
+
+    h+='<div class="grid2">';
+    h+='<div class="panel"><h3>Locations</h3>'+(d.locations||[]).map(function(l){return '<p><strong>'+esc(l.name)+'</strong> — '+esc(l.description)+'<br><span class="meta">'+esc(l.role)+'</span></p>';}).join('')+'</div>';
+    h+='<div class="panel"><h3>Characters</h3>'+(d.characters||[]).map(function(c){return '<p><strong>'+esc(c.name)+'</strong> — '+esc(c.role)+(c.relationshipVar?' <span class="tag">'+esc(c.relationshipVar)+'</span>':'')+'</p>';}).join('')+'</div>';
+    h+='</div>';
+
+    h+='<h3>Engine features exercised</h3><ul class="clean">'+(d.engineFeatures||[]).map(function(f){return '<li><strong>'+esc(f.feature)+'</strong> — '+esc(f.howUsed)+'</li>';}).join('')+'</ul>';
+
+    if(d.scheduledEvent){
+      var se=d.scheduledEvent;
+      h+='<h3>Scheduled event</h3><div class="panel quiet"><p><strong>'+esc(se.name)+'</strong></p><p class="meta">Trigger: '+esc(se.trigger)+'</p><p><strong>If present:</strong> '+esc(se.ifPresent)+'</p><p><strong>If absent:</strong> '+esc(se.ifAbsent)+'</p></div>';
+    }
+
+    h+='<h3>Endings</h3><ul class="clean">'+(d.endings||[]).map(function(e){return '<li><strong>'+esc(e.name)+'</strong> — '+esc(e.summary)+'<br><span class="meta">Conditions: '+esc(e.conditions)+'</span></li>';}).join('')+'</ul>';
+
+    if(d.designerRisks&&d.designerRisks.length){
+      h+='<h3>Designer\'s own stated risks</h3><ul class="clean">'+d.designerRisks.map(function(r){return '<li>'+esc(r)+'</li>';}).join('')+'</ul>';
+    }
+
+    h+='<div class="divider"></div><h2>Playtest findings</h2>';
+    h+='<div class="panel"><div style="margin-bottom:8px">'+callChip(pt.verdict&&pt.verdict.call)+'</div><p>'+esc(pt.verdict&&pt.verdict.rationale)+'</p></div>';
+
+    h+='<h3>Playthroughs walked by hand</h3>';
+    h+=(pt.playthroughs||[]).map(function(w){
+      return '<div class="panel quiet"><strong>'+esc(w.pathName)+'</strong> → ending: <em>'+esc(w.endingReached)+'</em><p>'+esc(w.narrativeFeel)+'</p></div>';
+    }).join('');
+
+    h+='<div class="grid2">';
+    h+='<div class="panel"><h3>What works</h3><ul class="clean">'+(pt.whatWorks||[]).map(function(w){return '<li>'+esc(w)+'</li>';}).join('')+'</ul></div>';
+    h+='<div class="panel"><h3>What breaks</h3><ul class="clean">'+(pt.whatBreaks||[]).map(function(b){
+      return '<li><span class="sev-'+esc(b.severity)+'">['+esc(String(b.severity||'').toUpperCase())+(b.kind?' / '+esc(b.kind):'')+']</span> '+esc(b.issue)+'<br><span class="meta">'+esc(b.why)+(b.where?' ('+esc(b.where)+')':'')+'</span></li>';
+    }).join('')+'</ul></div>';
+    h+='</div>';
+
+    h+='<h3>Biggest narrative problem</h3><blockquote>'+esc(pt.biggestNarrativeProblem)+'</blockquote>';
+    h+='<h3>Is this asking too much?</h3><div class="panel">'+esc(pt.askingTooMuch)+'</div>';
+    h+='<h3>Required changes</h3><ul class="clean">'+(pt.requiredChanges||[]).map(function(r){return '<li><strong>'+esc(r.change)+'</strong> — '+esc(r.rationale)+'</li>';}).join('')+'</ul>';
+    return h;
+  }
+
+  /* ---------------- PLAYABLE ENGINE ---------------- */
+  function coerce(v){ if(v==='true')return true; if(v==='false')return false; if(typeof v==='string'&&/^-?\d+$/.test(v))return parseInt(v,10); return v; }
+  function num(v){ if(typeof v==='number')return v; if(v===true)return 1; if(v===false||v==null)return 0; var n=parseFloat(v); return isNaN(n)?0:n; }
+  function toMin(v){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(v)); return m?(+m[1])*60+(+m[2]):null; }
+  function fmtMin(m){ if(m==null)return '—'; m=((m%1440)+1440)%1440; var hh=Math.floor(m/60),mm=m%60; var ap=hh<12?'AM':'PM'; var h12=hh%12; if(h12===0)h12=12; return h12+':'+(mm<10?'0':'')+mm+' '+ap; }
+
+  function newState(content){
+    var s={_clues:[],_items:[],_visited:[],_timeField:null};
+    (content.startState||[]).forEach(function(kv){
+      var val=kv.value;
+      if(toMin(val)!=null){ s._timeField=s._timeField||kv.field; s[kv.field]=toMin(val); }
+      else s[kv.field]=coerce(val);
+    });
+    if(s.location==null) s.location=(content.nodes[0]&&content.nodes[0].location)||'';
+    return s;
+  }
+  function timeMin(s){ return s._timeField?num(s[s._timeField]):null; }
+
+  function condPass(c,s){
+    var op=c.op, f=c.field, raw=c.value, cur=s[f];
+    switch(op){
+      case 'equals': return String(cur)===String(coerce(raw));
+      case 'not_equals': return String(cur)!==String(coerce(raw));
+      case 'gt': return num(cur)>num(raw);
+      case 'gte': return num(cur)>=num(raw);
+      case 'lt': return num(cur)<num(raw);
+      case 'lte': return num(cur)<=num(raw);
+      case 'is_true': return cur===true||cur==='true'||num(cur)>0;
+      case 'is_false': return !(cur===true||cur==='true'||num(cur)>0);
+      case 'has_clue': return s._clues.indexOf(raw)>=0||s[raw]===true||s[f]===true;
+      case 'has_visited': return s._visited.indexOf(raw)>=0||s._visited.indexOf(f)>=0;
+      case 'time_before': { var t=timeMin(s); return t==null?true:t<toMin(raw); }
+      case 'time_after': { var t2=timeMin(s); return t2==null?true:t2>toMin(raw); }
+      default: return true;
+    }
+  }
+  function condText(c){
+    var human={equals:'=',not_equals:'≠',gt:'>',gte:'≥',lt:'<',lte:'≤',is_true:'is true',is_false:'is false',has_clue:'knows',has_visited:'visited',time_before:'before',time_after:'after'};
+    return esc(c.field)+' '+(human[c.op]||c.op)+' '+esc(c.value);
+  }
+  function applyFx(e,s){
+    var op=e.op,f=e.field,raw=e.value;
+    switch(op){
+      case 'set': s[f]=coerce(raw); break;
+      case 'increment': s[f]=num(s[f])+num(raw==null?1:raw); break;
+      case 'decrement': s[f]=num(s[f])-num(raw==null?1:raw); break;
+      case 'add_clue': { var k=raw||f; if(s._clues.indexOf(k)<0)s._clues.push(k); s[k]=true; break; }
+      case 'remove_clue': { var k2=raw||f; s._clues=s._clues.filter(function(x){return x!==k2;}); break; }
+      case 'add_item': { var i=raw||f; if(s._items.indexOf(i)<0)s._items.push(i); break; }
+      case 'remove_item': { var i2=raw||f; s._items=s._items.filter(function(x){return x!==i2;}); break; }
+      case 'change_location': s.location=raw; break;
+      case 'add_minutes': { var tf=s._timeField||f; if(s._timeField==null){s._timeField=tf;} s[tf]=num(s[tf])+num(raw); break; }
+      case 'mark_event_completed': s[f||raw]=true; break;
+      case 'mark_visited': if(s._visited.indexOf(raw||f)<0)s._visited.push(raw||f); break;
+      case 'trigger_event': break;
+      default: if(raw!=null)s[f]=coerce(raw);
+    }
+  }
+
+  function mountPlayer(team){
+    var t=teams.filter(function(x){return x.team===team;})[0];
+    var content=t.content; var nodes={}; (content.nodes||[]).forEach(function(n){nodes[n.id]=n;});
+    var wrap=document.getElementById('player-'+team);
+    var showLocked=true;
+    var state, current;
+
+    function start(){ state=newState(content); current=content.startNode; draw(); }
+    function go(node,choice){
+      if(choice&&choice.effects) choice.effects.forEach(function(e){applyFx(e,state);});
+      if(state._visited.indexOf(current)<0) state._visited.push(current);
+      current=node; draw();
+    }
+    function status(){
+      var bits=[];
+      var t=timeMin(state); if(t!=null)bits.push('<b>Time</b> '+fmtMin(t));
+      if(state.location)bits.push('<b>Location</b> '+esc(state.location));
+      Object.keys(state).forEach(function(k){
+        if(k[0]==='_'||k===state._timeField||k==='location')return;
+        if(typeof state[k]==='number')bits.push('<b>'+esc(k)+'</b> '+state[k]);
+      });
+      if(state._clues.length)bits.push('<b>Clues</b> '+state._clues.map(esc).join(', '));
+      if(state._items.length)bits.push('<b>Items</b> '+state._items.map(esc).join(', '));
+      return bits.join('');
+    }
+    function draw(){
+      var n=nodes[current];
+      var html='<div class="screen">';
+      html+='<div class="statusbar">'+status()+'</div>';
+      if(!n){
+        html+='<div class="stage"><div class="nodebody"><span class="ttl">Broken link</span>This choice points to node "'+esc(current)+'", which the writer never created. (One of the wiring bugs the playtesters flagged — left intact so you can see it.)</div></div>';
+        html+='<div class="player-controls"><button class="pc" data-restart="1">↺ Restart chapter</button></div></div>';
+        wrap.innerHTML=html; bind(); return;
+      }
+      var isEnd=n.isEnding===true||n.type==='ending'||!(n.choices&&n.choices.length);
+      if(isEnd) html+='<div class="ending-banner">◆ ENDING — '+esc(n.title)+'</div>';
+      html+='<div class="stage"><div class="loc-time"><span>'+esc(n.location||state.location||'')+'</span><span>'+(n.time?esc(n.time)+' (authored)':'')+'</span></div>';
+      html+='<div class="nodebody"><span class="ttl">'+esc(n.title)+'</span>'+esc(n.body)+'</div></div>';
+      html+='<div class="choices">';
+      var shown=0;
+      (n.choices||[]).forEach(function(c,idx){
+        var conds=c.conditions||[];
+        var failing=conds.filter(function(cc){return !condPass(cc,state);});
+        var ok=failing.length===0;
+        if(ok){
+          shown++;
+          html+='<button class="choice" data-go="'+idx+'">'+esc(c.label)+(c.effectsText?'<span class="fx">→ '+esc(c.effectsText)+'</span>':'')+'</button>';
+        } else if(showLocked){
+          var why=(c.conditionText?esc(c.conditionText):failing.map(condText).join(' · '));
+          html+='<div class="choice locked"><span class="lock-ico">🔒</span>'+esc(c.label)+'<span class="why">Locked — needs: '+why+'</span></div>';
+        }
+      });
+      if(!isEnd && shown===0) html+='<div class="footnote" style="color:var(--bad)">No available choices from here — a dead end (the kind the engine is supposed to prevent).</div>';
+      html+='</div>';
+      html+='<div class="player-controls"><button class="pc" data-restart="1">↺ Restart chapter</button>'
+          +'<label class="toggle"><input type="checkbox" id="lk-'+team+'" '+(showLocked?'checked':'')+'> show locked choices &amp; reasons</label></div>';
+      html+='</div>';
+      wrap.innerHTML=html; bind();
+    }
+    function bind(){
+      wrap.querySelectorAll('[data-go]').forEach(function(b){
+        b.addEventListener('click',function(){ var n=nodes[current]; var c=n.choices[+b.getAttribute('data-go')]; go(c.destination,c); });
+      });
+      var rb=wrap.querySelector('[data-restart]'); if(rb)rb.addEventListener('click',start);
+      var lk=wrap.querySelector('#lk-'+team); if(lk)lk.addEventListener('change',function(){showLocked=lk.checked;draw();});
+    }
+    start();
+  }
+
+  /* ---------------- SHELL / TABS ---------------- */
+  var tabs=[{id:'overview',label:'Overview & Verdict'}];
+  teams.forEach(function(t){ tabs.push({id:'team'+t.team,label:'Team '+t.team+' · '+((t.design&&t.design.premise&&t.design.premise.title)||'')}); });
+
+  var tabsEl=document.getElementById('tabs'), mainEl=document.getElementById('main');
+  var views={};
+  tabs.forEach(function(tb,i){
+    var btn=document.createElement('button'); btn.textContent=tb.label; btn.setAttribute('data-tab',tb.id);
+    if(i===0)btn.classList.add('active'); tabsEl.appendChild(btn);
+    var sec=document.createElement('section'); sec.className='view'+(i===0?' active':''); sec.id=tb.id;
+    if(tb.id==='overview') sec.innerHTML=renderOverview();
+    else { var team=teams[i-1]; sec.innerHTML=renderTeam(team); }
+    mainEl.appendChild(sec); views[tb.id]=sec;
+  });
+
+  tabsEl.addEventListener('click',function(e){
+    var b=e.target.closest('[data-tab]'); if(!b)return;
+    tabsEl.querySelectorAll('button').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');
+    Object.keys(views).forEach(function(k){views[k].classList.remove('active');});
+    views[b.getAttribute('data-tab')].classList.add('active');
+    window.scrollTo({top:0,behavior:'smooth'});
+  });
+
+  mainEl.addEventListener('click',function(e){
+    var b=e.target.closest('[data-play]'); if(!b)return;
+    var team=+b.getAttribute('data-play');
+    var w=document.getElementById('player-'+team);
+    if(w.classList.contains('open')){ w.classList.remove('open'); w.innerHTML=''; b.textContent='▶ Play this chapter'; }
+    else { w.classList.add('open'); b.textContent='▼ Hide chapter'; mountPlayer(team); }
+  });
+})();
+</script>
+</body>
+</html>

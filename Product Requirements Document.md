@@ -6,7 +6,15 @@
 
 ## Working Title: BranchWorld Engine
 
-### Version 0.1 — Planning Draft
+### Version 1.1 — Engine-Enforcement Revision
+
+> **Revision history.** This document incorporates the v1.1 engine-enforcement corrections
+> directly into the body. The four corrections and the build-blocking linter are stated
+> normatively in **§ Engine-Enforcement Requirements (v1.1)** below and are reflected
+> throughout §10.6, §10.7, §10.11, §15, §17, §19, §20, §22, and §23. The rationale — why
+> these changes were made, from the triple-team chapter-one review — is preserved in
+> **Appendix A**. Supersedes the original v0.1 planning draft; the prior standalone "v1.1"
+> delta note has been folded into this document.
 
 ---
 
@@ -34,6 +42,77 @@ The product has two major parts:
 The engine should be genre-neutral. The first real game may be mob-themed, but the engine itself should support many possible story types: mystery, survival, coming-of-age, detective, horror, sci-fi, historical adventure, or educational games.
 
 A small sample game, **The 4:10 Envelope**, should be created as a reference scenario. This is not the first commercial title. It is a compact proof-of-concept used to prove that the engine works.
+
+---
+
+## Engine-Enforcement Requirements (v1.1 — Normative)
+
+**Organizing principle:** the engine enforces its own promises; the author cannot silently
+break them. Anything the original draft left to author discipline becomes an engine primitive
+plus a build-blocking linter check. These requirements are **normative** and supersede the
+legacy mechanics in §10.6, §10.7, §10.11, §15, §17, §19, §20.3–20.4, §22.3, and §23 wherever
+they conflict. (See Appendix A for why.)
+
+### EE-1. Time is engine-derived; hardcoded timestamps are banned
+
+- The current clock has exactly one source of truth: `startTime + Σ(add_minutes applied)`. The
+  engine computes and exposes `currentTime`; the renderer injects it.
+- Node bodies **must not** embed absolute clock times as authored ground truth. Prose may
+  reference a `{{time}}` token (engine-substituted) or relative phrasing ("the light is going").
+- The node `time` field is **demoted** to `authorTimeHint` (non-authoritative, editor-only) or
+  removed. The engine never reads it for logic.
+- **Calibration is a requirement, not a vibe:** per-action `add_minutes` costs must be tuned so an
+  efficient path lands *near* the deadline and any meaningful detour genuinely risks missing it.
+  The linter enforces that the deadline is reachable.
+
+### EE-2. Scheduled events are real engine triggers with a mandatory if-absent path
+
+- After **every** time advance, the engine evaluates all incomplete scheduled events regardless
+  of the player's location.
+- When a trigger fires: **Present** (player at the event location) → route to the witnessed node;
+  **Absent** → apply the if-absent effects, **automatically plant a discoverable clue** at a
+  reachable recovery node, mark the event completed, and write a debug log entry.
+- Every scheduled event **must declare a reachable `recoveryNodeId`**. Shipping one without it is a
+  linter failure. This is the "missing something opens a different path, never a dead end"
+  guarantee from §8.3 — now enforced.
+
+### EE-3. Endings resolve from accumulated state, never hardwired to choices
+
+- Replace all choice→ending links with a single **Ending Resolver**, evaluated at resolution
+  points (deadline reached, or an explicit resolve trigger).
+- The resolver walks an **ordered** list of endings, each gated by conditions over accumulated
+  state, and selects the first match. A **mandatory catch-all default ending** guarantees
+  exhaustiveness — no reachable end-state may match zero endings.
+- Choices may advance state and time but **must not target ending nodes directly** (linter-enforced).
+
+### EE-4. Prose must not contradict state
+
+- No node — especially an ending — may narrate an outcome (the town drowned, the gate failed)
+  unless the corresponding flag is actually set on the path that reached it.
+- Enforced by a per-ending review checklist plus an AI-assisted consistency pass.
+
+### EE-5. The Linter (build-blocking) — the linchpin
+
+Runs in CI/build **and** live inside the authoring tool. Three blocking checks (new):
+
+1. **Deadline reachability** — compute the longest reachable accumulated-time path; **FAIL** if it
+   cannot exceed the deadline. **Warn** if the shortest path already overruns it (unwinnable).
+2. **Ending exhaustiveness & reachability** — every reachable end-state matches **exactly one**
+   ending; flag dead-code (unreachable) endings and zero-match holes (fall-through).
+3. **Scheduled-event integrity** — every scheduled event defines present + absent effects **and**
+   has a reachable `recoveryNodeId`.
+
+Carried over from §22.3 (still required): broken links, missing destinations, undefined/unused
+variables, duplicate IDs, no-exit nodes, unreachable nodes, conditions referencing deleted
+variables. **Guardrail (P2): one variable = one meaning** — the linter flags suspected overloading.
+
+### EE-6. One engine core (architectural requirement)
+
+The engine (state, conditions, effects, engine-derived time, scheduled events, ending resolver,
+linter) is a **pure, serializable, framework-agnostic TypeScript module** consumed *identically*
+by the player, the authoring tool, and CI. No engine logic is duplicated in any UI. This keeps the
+player and the authoring tool from drifting and lets the linter and AI-assist reason about exactly
+what the player will experience.
 
 ---
 
@@ -608,10 +687,10 @@ Example node:
   "title": "Envelope Pickup Witnessed",
   "type": "event",
   "location": "Diner",
-  "body": "At 4:10 exactly, a man in a gray coat enters the diner...",
+  "body": "{{time}} — a man in a gray coat enters the diner. He does not look at the menu...",
   "conditions": [
     { "field": "location", "operator": "equals", "value": "Diner" },
-    { "field": "time", "operator": "equals", "value": "16:10" },
+    { "field": "time", "operator": "greater_than_or_equal", "value": "16:10" },
     { "field": "envelope_picked_up", "operator": "equals", "value": false }
   ],
   "choices": ["C030_A", "C030_B", "C030_C"]
@@ -898,6 +977,14 @@ After this choice:
 
 ## 10.6 Time System
 
+> **v1.1 (normative — see §EE-1):** Time is **engine-derived**. The only source of truth for the
+> clock is `startTime + Σ(add_minutes)`; the engine exposes `currentTime` and the renderer injects
+> it. Node bodies must **not** embed absolute clock times as authored ground truth — use the
+> `{{time}}` token or relative phrasing. The legacy authoritative node `time` field is demoted to
+> `authorTimeHint` (editor-only, never read for logic). Per-action `add_minutes` costs must be
+> calibrated so the deadline can bite; the linter fails the build if the longest reachable path
+> cannot exceed the deadline.
+
 The engine must support a simple in-game clock.
 
 For the MVP, time can be represented as:
@@ -962,6 +1049,13 @@ The envelope is gone, but a receipt remains.
 
 ## 10.7 Scheduled Event System
 
+> **v1.1 (normative — see §EE-2):** Scheduled events are real engine triggers. After **every**
+> time advance the engine evaluates all incomplete events **regardless of the player's location**.
+> Present → route to the witnessed node; **Absent → apply the if-absent effects, automatically
+> plant a discoverable clue at a reachable `recoveryNodeId`, mark the event completed, and log it.**
+> Every event **must** declare a reachable `recoveryNodeId` (linter-enforced). The if-absent path
+> therefore carries effects **and** a recovery node, not effects alone.
+
 Scheduled events are major world events that happen at a certain time or under certain conditions.
 
 Example:
@@ -975,11 +1069,12 @@ The event should have different results depending on whether the player is prese
 Example logic:
 
 ```text
-IF player is at Diner at 4:10 PM:
-    Show scene: Envelope Pickup Witnessed
-ELSE:
-    Set envelope_picked_up = true
-    Create clue opportunity at Diner
+IF player is at the Diner when the event fires:
+    Route to node: Envelope Pickup Witnessed (ifPresentNode)
+ELSE (player is anywhere else):
+    Apply ifAbsentEffects (e.g. envelope_picked_up = true)
+    Automatically plant the discoverable clue at the reachable recoveryNodeId
+    Mark the event completed; write a debug log entry
 ```
 
 ### MVP Scheduled Event Requirements
@@ -992,11 +1087,13 @@ The engine should support:
 
 - trigger condition
 
-- effect if player is present
+- node to route to if player is present (`ifPresentNode`)
 
-- effect if player is absent
+- effects if player is absent (`ifAbsentEffects`)
 
-- event completion flag
+- **reachable if-absent recovery node (`recoveryNodeId`) — mandatory (v1.1, linter-enforced)**
+
+- event completion flag (fires at most once)
 
 - debug log entry when event fires
 
@@ -1006,21 +1103,17 @@ Example:
 {
   "id": "E410",
   "title": "Envelope Pickup",
-  "trigger": {
-    "field": "time",
-    "operator": "equals",
-    "value": "16:10"
-  },
-  "if_present": {
-    "location": "Diner",
-    "node": "N030"
-  },
-  "if_absent": {
-    "effects": [
-      { "field": "envelope_picked_up", "operation": "set", "value": true },
-      { "field": "diner_receipt_available", "operation": "set", "value": true }
-    ]
-  }
+  "trigger": [
+    { "field": "time", "operator": "greater_than_or_equal", "value": "16:10" }
+  ],
+  "eventLocation": "L_DINER",
+  "ifPresentNode": "N030_witness",
+  "ifAbsentEffects": [
+    { "field": "envelope_picked_up", "operation": "set", "value": true },
+    { "field": "diner_receipt_available", "operation": "set", "value": true },
+    { "field": "clues", "operation": "add_clue", "value": "diner_receipt" }
+  ],
+  "recoveryNodeId": "N031_receipt"
 }
 ```
 
@@ -1147,9 +1240,16 @@ If the player has not seen the car, that choice does not appear.
 
 ## 10.11 Ending System
 
+> **v1.1 (normative — see §EE-3):** Endings are **not** nodes that choices link to. They live in
+> an **ordered resolver list**, each gated by conditions over accumulated state, evaluated at
+> resolution points (deadline reached or an explicit resolve trigger). The resolver selects the
+> **first match**; a **mandatory catch-all default ending** guarantees no reachable end-state
+> matches zero endings. Choices may advance state and time but **must not target an ending as a
+> `destination`** (linter-enforced).
+
 The engine should support multiple endings based on accumulated world state.
 
-Endings should be nodes with conditions.
+Endings are entries in a state-resolved list (not choice-linked nodes).
 
 Example:
 
@@ -1634,7 +1734,7 @@ companion = none
 Player sees:
 
 ```text
-The last bell rings at 3:00 p.m.
+The last bell rings. {{time}}.
 
 Most kids pour out toward the buses, but Mara grabs your sleeve before you can leave.
 
@@ -1882,7 +1982,7 @@ envelope_picked_up = false
 Player sees:
 
 ```text
-At 4:10 exactly, a man in a gray coat enters the diner.
+{{time}} — a man in a gray coat enters the diner.
 
 He does not look at the counter. He does not look at the menu.
 
@@ -2029,6 +2129,11 @@ The player can reach this truth only if they treated Mara in a way that preserve
 
 # 15. Sample Game Endings
 
+> **v1.1 (see §EE-3):** These endings are evaluated by the **Ending Resolver** as an **ordered
+> list**, first match wins, at the resolution point. A **mandatory catch-all default** (Ending F
+> below) guarantees exhaustiveness — no reachable end-state falls through with zero matches. No
+> choice links directly to any ending.
+
 ## Ending A: The Witness
 
 Conditions:
@@ -2096,6 +2201,21 @@ has_diner_receipt = true
 Summary:
 
 The player does not solve everything, but Mara trusts them enough to reveal the deeper truth.
+
+## Ending F: Out of Time (default catch-all — mandatory)
+
+Conditions:
+
+```text
+(none — this is the default; it matches when no ending above does)
+```
+
+Summary:
+
+The afternoon slips away. Whatever the player did or didn't piece together, the deadline arrives
+and the moment to act is gone. This default guarantees every reachable end-state resolves to
+exactly one ending (v1.1 §EE-3); it is also the natural home for the "missed every exit / the
+world moved without you" outcome once the clock bites.
 
 ---
 
@@ -2172,6 +2292,19 @@ Build a working engine that can play through **The 4:10 Envelope** with:
 ---
 
 # 17. Staged Development Plan
+
+> **v1.1 supersession — decomposed sub-projects.** The original Stage 1–8 order below predates the
+> engine-enforcement revision. The product (runtime + authoring suite + AI flow utility + linter)
+> is now decomposed into sequential sub-projects, each with its own spec → plan → build cycle.
+> **We start at A and do not author into an engine that cannot yet enforce its own rules.**
+>
+> - **Sub-project A — Hardened Engine Core + Linter** (headless, fully unit-tested, pure TS). Where
+>   every §EE fix lives. *Done when the linter blocks a deliberately-broken chapter and passes a correct one.*
+> - **Sub-project B — Mobile-responsive Web Player + Debug Panel.** Thin UI over the core; localStorage saves.
+> - **Sub-project C — Validation chapter.** Port the chosen sample to the hardened model and prove the thesis.
+> - **Sub-project D — Authoring + Story-Flow Utility** (graph, inspector, AI-assist). Built last, on the proven core.
+>
+> The Stage 1–8 breakdown below is retained as finer-grained guidance for building Sub-projects A–B.
 
 ## Stage 1: Engine Skeleton
 
@@ -2464,10 +2597,11 @@ App
   "title": "After School",
   "type": "scene",
   "location": "L_SCHOOL",
-  "body": "The last bell rings at 3:00 p.m...",
+  "body": "The last bell rings. {{time}} — the parking lot is already half-empty...",
   "conditions": [],
   "entryEffects": [],
   "choices": ["C001_A", "C001_B", "C001_C"],
+  "authorTimeHint": "~15:00 (editor-only; never read by engine logic — see §EE-1)",
   "tags": ["opening", "school", "mara"],
   "repeatable": false
 }
@@ -2545,34 +2679,64 @@ App
 {
   "id": "E410",
   "title": "Envelope Pickup",
-  "conditions": [
-    {
-      "field": "time",
-      "operator": "greater_than_or_equal",
-      "value": "16:10"
-    },
-    {
-      "field": "envelope_picked_up",
-      "operator": "equals",
-      "value": false
-    }
+  "trigger": [
+    { "field": "time", "operator": "greater_than_or_equal", "value": "16:10" }
   ],
-  "ifPresent": {
-    "location": "L_DINER",
-    "node": "N030"
-  },
+  "eventLocation": "L_DINER",
+  "ifPresentNode": "N030_witness",
   "ifAbsentEffects": [
-    {
-      "field": "envelope_picked_up",
-      "operation": "set",
-      "value": true
-    },
-    {
-      "field": "diner_receipt_available",
-      "operation": "set",
-      "value": true
-    }
-  ]
+    { "field": "envelope_picked_up", "operation": "set", "value": true },
+    { "field": "diner_receipt_available", "operation": "set", "value": true },
+    { "field": "clues", "operation": "add_clue", "value": "diner_receipt" }
+  ],
+  "recoveryNodeId": "N031_receipt"
+}
+
+> The trigger fires on the accumulated clock (`time_after`/`>=`), not an exact-minute match —
+> `add_minutes` can skip past the boundary. Completion is tracked by the engine, so no
+> `envelope_picked_up == false` guard is needed. `recoveryNodeId` is **mandatory** and must be
+> reachable (v1.1 §EE-2).
+```
+
+## 19.8 Ending Object (v1.1)
+
+Endings are entries in an **ordered resolver list**, not nodes. Conditions are over accumulated
+state only; exactly one ending is the mandatory `isDefault` catch-all with no conditions.
+
+```json
+{
+  "id": "ending_witness",
+  "name": "The Witness",
+  "priority": 10,
+  "isDefault": false,
+  "conditions": [
+    { "field": "saw_black_car", "operator": "equals", "value": true },
+    { "field": "knows_plate_number", "operator": "equals", "value": true },
+    { "field": "called_police", "operator": "equals", "value": true }
+  ],
+  "summary": "The player reports enough to help expose what happened.",
+  "body": "..."
+}
+```
+
+The mandatory default catch-all (no conditions):
+
+```json
+{ "id": "ending_out_of_time", "name": "Out of Time", "isDefault": true, "conditions": [], "summary": "The deadline arrives; the moment to act is gone." }
+```
+
+## 19.9 Variable Registry Entry (v1.1)
+
+Every author-declared variable carries a **single semantic purpose** (one variable = one meaning;
+the linter flags overloading — §EE-5).
+
+```json
+{
+  "name": "mara_trust",
+  "type": "number",
+  "default": 0,
+  "singleSemanticPurpose": "How much Mara trusts the player (relationship only).",
+  "writerLabel": "Mara's trust"
 }
 ```
 
@@ -2613,26 +2777,29 @@ When the player enters a location:
 
 ## 20.3 Scheduled Event Logic
 
-After any time advancement:
+After **every** time advancement (v1.1 §EE-2 — location-independent):
 
 ```text
 1. Check all incomplete scheduled events.
-2. If event trigger condition is met:
-   a. If player is in event location, route to event node.
-   b. If player is elsewhere, apply absent effects.
-3. Mark event as complete if appropriate.
-4. Log event in debug panel.
+2. If an event's trigger condition is met (on the accumulated clock):
+   a. Present  -> route to ifPresentNode.
+   b. Absent   -> apply ifAbsentEffects AND auto-plant the discoverable
+                  clue at the reachable recoveryNodeId.
+3. Mark the event completed (it fires at most once).
+4. Log the event in the debug panel.
 ```
 
 ## 20.4 Ending Resolution Logic
 
-After each major action:
+At a resolution point only — the deadline is reached or a node carries an explicit resolve
+trigger (v1.1 §EE-3):
 
 ```text
-1. Check all endings.
-2. Filter endings by conditions.
-3. If multiple endings match, select highest-priority ending.
-4. Route player to ending node.
+1. Walk the ordered ending list.
+2. Select the FIRST non-default ending whose conditions pass.
+3. If none match, select the mandatory catch-all default ending.
+   (No reachable end-state may match zero endings.)
+4. Present the resolved ending. Choices never link to endings directly.
 ```
 
 ---
@@ -2760,31 +2927,47 @@ Return to Mara
 Expected ending: Quiet Truth
 ```
 
-## 22.3 Authoring Tool Validation
+## 22.3 Authoring Tool Validation (build-blocking linter — v1.1 §EE-5)
 
-The authoring tool should detect:
+The linter runs in CI/build **and** live in the authoring tool. **Errors block the build.**
+
+**Three blocking checks (new in v1.1):**
+
+1. **Deadline reachability** — compute the longest reachable accumulated-time path; **FAIL** if it
+   cannot exceed the deadline (the clock can never bite). **Warn** if the shortest path already
+   overruns the deadline (unwinnable by construction).
+2. **Ending exhaustiveness & reachability** — every reachable end-state matches **exactly one**
+   ending; flag dead-code (unreachable) endings and zero-match holes (fall-through).
+3. **Scheduled-event integrity** — every scheduled event defines present + absent effects **and**
+   has a reachable `recoveryNodeId`; a choice must not target an ending as a destination.
+
+**Carried over (still required, now enforced):**
 
 - broken node links
-
 - missing destinations
-
 - undefined variables
-
 - unused variables
-
 - unreachable nodes
-
 - duplicate IDs
-
 - nodes with no exit
-
 - endings that cannot be reached
-
 - conditions referencing deleted variables
+
+**Guardrail (P2): one variable = one meaning** — flag a variable whose use suggests it encodes
+more than its declared `singleSemanticPurpose`.
 
 ---
 
 # 23. Success Metrics
+
+> **v1.1 success criteria (supersede the originals where they conflict):**
+> 1. The clock **can** run out — linter-proven and felt in play.
+> 2. A scheduled event fires whether or not the player is present, and the absent path leaves a
+>    recoverable clue at a reachable node.
+> 3. Endings resolve from accumulated state with **no zero-match holes and no dead-code endings**.
+> 4. No node narrates a flag that isn't set on the path that reached it.
+> 5. The **same engine core** powers the player, the linter, and (later) the authoring tool.
+> 6. A reviewer feels reactivity on the **time and events** axes, not only the clue axis.
 
 For MVP, success should be measured by whether the engine can demonstrate the concept clearly.
 
@@ -3108,3 +3291,58 @@ The MVP should stay small, but it must include the essential idea:
 > The player goes somewhere, at a certain time, with certain knowledge, after making certain choices — and the story responds.
 
 That is the engine.
+
+---
+
+# Appendix A — v1.1 Revision Rationale (why the engine-enforcement corrections exist)
+
+*This appendix preserves the rationale that originally lived in the standalone "v1.1" delta note.
+The normative rules themselves are in **§ Engine-Enforcement Requirements (v1.1)** near the top and
+are reflected throughout §10, §15, §17, §19, §20, and §22–23.*
+
+## A.1 The review finding
+
+Three independent design teams — each running designer → writer → playtester in isolation —
+separately invented, wrote, and adversarially playtested a complete chapter one against the
+original (v0.1) model. All three, working blind to one another, shipped the **same four structural
+failures**:
+
+1. The deadline could not run out (per-action time costs far too cheap).
+2. Authors hardcoded fictional timestamps into prose to fake the urgency the clock wasn't conveying.
+3. The "world moves without you" scheduled event was never a real trigger — only an opt-in choice in
+   one node — and the if-absent clue-recovery path was unimplemented.
+4. Endings were hardwired to specific choices rather than resolved from accumulated state, so the
+   fiction asserted outcomes the state contradicted.
+
+Convergence this tight across isolated teams is the signal: **these are not authoring mistakes, they
+are the path of least resistance the v0.1 model creates.** The clue/knowledge-gating pillar — the one
+feature v0.1 forced the author to wire correctly — worked in all three and was the only thing that
+felt like a living world.
+
+> **Organizing principle of v1.1:** the engine enforces its own promises; the author cannot silently
+> break them. Anything v0.1 left to author discipline becomes an engine primitive plus a
+> build-blocking linter check.
+
+## A.2 The four corrections → where they now live
+
+| Correction | Normative rule | Reflected in |
+|---|---|---|
+| Time is engine-derived; hardcoded timestamps banned | §EE-1 | §10.6, §19.2 |
+| Scheduled events real + mandatory if-absent recovery | §EE-2 | §10.7, §19.7, §20.3 |
+| Endings resolved from state, exhaustive, default catch-all | §EE-3 | §10.11, §15, §19.8, §20.4 |
+| Prose must not contradict state | §EE-4 | per-ending checklist, AI-assist pass |
+| Build-blocking linter (3 checks) | §EE-5 | §22.3 |
+| One pure engine core | §EE-6 | §18.3 |
+
+## A.3 The reviewer's recommended next step (retained verbatim)
+
+> "Before authoring any more chapters, harden the engine and add a linter — do not fix the three
+> chapters first. Specifically: (1) make time engine-derived and ban hardcoded node timestamps;
+> (2) make scheduled events fire on the accumulated clock with a mandatory if-absent clue path;
+> (3) replace choice→ending links with a single state-resolver that requires an exhaustive cascade.
+> Then ship a build-time validator that fails on three checks: the longest reachable path cannot
+> exceed the deadline, every reachable end-state matches exactly one ending, and every scheduled
+> event has a reachable absent-path recovery. Re-run the smallest, strongest chapter through the
+> hardened engine as the reference implementation."
+
+*Full team-by-team detail lives in `branchworld-review.md`.*

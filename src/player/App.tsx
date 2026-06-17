@@ -4,14 +4,13 @@ import { Player } from './Player';
 
 export function App() {
   const [storyId, setStoryId] = useState(stories[0].id);
-  const story = stories.find((s) => s.id === storyId)!.story;
+  const story = (stories.find((s) => s.id === storyId) ?? stories[0]).story;
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
       <div className="flex items-center gap-2 border-b border-stone-200 px-4 py-2 text-sm">
         <label htmlFor="story" className="text-stone-500">Story</label>
         <select
           id="story"
-          aria-label="Story"
           value={storyId}
           onChange={(e) => setStoryId(e.target.value)}
           className="rounded border border-stone-300 px-2 py-1"

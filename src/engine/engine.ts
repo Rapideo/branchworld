@@ -1,4 +1,4 @@
-import type { Story, StoryNode, WorldState, GameView, ChoiceView, Ending } from './types';
+import type { Story, StoryNode, WorldState, GameView, ChoiceView, Ending, EngineSnapshot } from './types';
 import { initState } from './state';
 import { evaluateConditions, explainFailing } from './conditions';
 import { applyEffects } from './effects';
@@ -79,6 +79,33 @@ export class GameEngine {
     this.log.push(...res.log);
     const nextId = res.routedNodeId ?? choice.destination;
     this.enter(nextId);
+    return this.view();
+  }
+
+  snapshot(): EngineSnapshot {
+    return {
+      version: 1,
+      storyId: this.story.id,
+      currentId: this.currentId,
+      state: JSON.parse(JSON.stringify(this.state)) as WorldState,
+      log: [...this.log],
+      endingId: this.ending?.id,
+    };
+  }
+
+  restore(snap: EngineSnapshot): void {
+    if (snap.version !== 1) throw new Error(`Unsupported snapshot version: ${snap.version}`);
+    if (snap.storyId !== this.story.id) {
+      throw new Error(`Snapshot is for story ${snap.storyId}, not ${this.story.id}`);
+    }
+    this.state = JSON.parse(JSON.stringify(snap.state)) as WorldState;
+    this.currentId = snap.currentId;
+    this.log = [...snap.log];
+    this.ending = snap.endingId ? this.story.endings.find((e) => e.id === snap.endingId) : undefined;
+  }
+
+  gotoNode(id: string): GameView {
+    this.enter(id);
     return this.view();
   }
 }

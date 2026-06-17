@@ -143,3 +143,12 @@ export interface LintResult {
   errors: LintIssue[];
   warnings: LintIssue[];
 }
+
+export interface EngineSnapshot {
+  version: 1;
+  storyId: string;
+  currentId: string;
+  state: WorldState;
+  log: string[];
+  endingId?: string;
+}

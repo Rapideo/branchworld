@@ -58,3 +58,33 @@ describe('praterLine — every ending resolves from accumulated state', () => {
   });
   // ending_missed is covered by the clock tests in the calibration suite.
 });
+
+describe('praterLine — the 23:30 canal handoff fires both ways', () => {
+  it('present: witnessing the handoff sets the doubling clues', () => {
+    // reach loc_canal before 23:30 (arrive ~23:00), then wait for the half-hour
+    const v = play(['take_satchel', 'tram', 'truth', 'walk_with_me', 'to_canal', 'wait_for_handoff']);
+    expect(v.node.id).toBe('node_handoff_witnessed');
+    expect(v.state.clues).toContain('saw_real_receiver');
+    expect(v.state.vars.handoff_witnessed).toBe(true);
+    expect(v.state.completedEvents).toContain('event_handoff');
+  });
+
+  it('absent: the drop happens without you and plants a recoverable clue', () => {
+    const g = new GameEngine(praterLine);
+    // dawdle off-canal: a slow Sperl spine lands at the crossroads ~22:50, then ride the
+    // Riesenrad (+45) which crosses 23:30 while location !== loc_canal -> the event fires absent.
+    [
+      'search_satchel', 'confront_him', 'own_arithmetic', 'walk',
+      'press_film', 'recover', 'drop_script', 'walk_with_me', 'to_riesenrad',
+    ].forEach((id) => g.choose(id));
+    expect(g.view().state.vars.handoff_missed).toBe(true);
+    expect(g.view().state.clues).toContain('chalk_marks');
+    expect(g.view().state.completedEvents).toContain('event_handoff');
+    expect(g.view().state.vars.handoff_witnessed).toBe(false);
+    // now go down to the canal (late) and read the chalk at the recovery node
+    g.choose('down_to_canal'); // -> node_canal_approach, already past 23:30
+    const v = g.choose('too_late'); // -> node_canal_drop (recoveryNodeId)
+    expect(v.node.id).toBe('node_canal_drop');
+    expect(v.state.clues).toContain('knows_who_took_film');
+  });
+});

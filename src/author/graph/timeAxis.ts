@@ -1,5 +1,6 @@
 import type { Story } from '../../engine';
 import { parseTime } from '../../engine';
+export { TimeAxis } from './TimeAxisComponent';
 
 export interface TimeMark { id: string; label: string; triggerMin: number; frac: number; }
 export interface TimeAxisData { startMin: number; deadlineMin: number; windowMin: number; marks: TimeMark[]; }

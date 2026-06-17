@@ -773,8 +773,9 @@ export const praterLine: Story = {
         { field: 'volkov_suspicion', op: 'gte', value: '4' },
       ],
       body:
-        'You board the 02:10 alone. The doors close, the platform slides away, and the steel canister in your coat is light as a lie — because that is what it is. The decoy. Engine schematics, real and worthless, the only thing Irina Dragomir ever trusted you with.\n\n' +
-        'She never handed you the real film. You never gave her reason to. And somewhere back in the wet city, Volkov\'s net has finished drawing closed around a frightened physicist who ran out of people to believe in. You\'ll read about it, or you won\'t; either way it is no longer yours to fix.\n\n' +
+        'The doors close. The platform slides away. The steel canister in your coat is light as a lie — because that is what it is. The decoy. Engine schematics, real and worthless, the only thing Irina Dragomir ever trusted you with.\n\n' +
+        'She never handed you the real film. You never gave her reason to. Whether she is sitting across from you now, watching the dark city let you go, or whether the wet streets swallowed her the moment you stopped being worth following — the failure is the same. You never earned the real film. You never earned the right to carry her out.\n\n' +
+        'And somewhere back in Vienna, Volkov\'s net has finished drawing closed around a frightened physicist who ran out of people to believe in. You\'ll read about it, or you won\'t; either way it is no longer yours to fix.\n\n' +
         'The conductor passes, checking his borrowed watch. Salzburg by dawn. A debrief. A quiet conversation about what went wrong, in which no one will quite say it was you.\n\n' +
         'The rain stops somewhere past the city limits. You watch your own reflection in the black glass — a green courier on his first solo night, going home with the wrong canister and the right lesson, learned too late to spend: in this work, trust is the only currency, and you walked into Vienna unable to afford a thing.\n\n' +
         'The night moved on without you. It always does.',

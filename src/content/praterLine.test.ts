@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GameEngine, lintStory } from '../engine';
+import { GameEngine, lintStory, parseTime } from '../engine';
 import { praterLine } from './praterLine';
 
 function play(ids: string[]) {
@@ -86,5 +86,30 @@ describe('praterLine — the 23:30 canal handoff fires both ways', () => {
     const v = g.choose('too_late'); // -> node_canal_drop (recoveryNodeId)
     expect(v.node.id).toBe('node_canal_drop');
     expect(v.state.clues).toContain('knows_who_took_film');
+  });
+});
+
+describe('praterLine — the clock bites, but fairly', () => {
+  // The engine clock is absolute minutes from 20:00 (1200); 02:10 next day = 1570 ('26:10').
+  const DEADLINE = parseTime('26:10'); // 1570
+
+  it('an efficient decisive run makes the 02:10', () => {
+    // the leanest spine: tram to Sperl, the plain truth, walk her out, straight west
+    const v = play(['take_satchel', 'tram', 'truth', 'walk_with_me', 'to_westbahnhof']);
+    expect(v.endingReached?.id).not.toBe('ending_missed');
+    expect(v.state.time).toBeLessThan(DEADLINE); // arrives before 02:10 with margin
+  });
+
+  it('a dawdling / double-detour run misses the train', () => {
+    // walk everywhere + the slow Sperl detours + the Riesenrad + the canal drop + the underpass:
+    // every minute-sink on the board, then finally bolt for Westbahnhof — too late.
+    const v = play([
+      'search_satchel', 'confront_him', 'own_arithmetic', 'walk',
+      'press_film', 'recover', 'drop_script', 'walk_with_me',
+      'to_riesenrad', 'down_to_canal', 'too_late',
+      'take_to_volkov', 'how_blown', 'refuse_and_run',
+    ]);
+    expect(v.endingReached?.id).toBe('ending_missed');
+    expect(v.state.time).toBeGreaterThan(DEADLINE);
   });
 });

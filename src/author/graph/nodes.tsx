@@ -47,9 +47,9 @@ export function EventBadge({ data }: Props) {
 }
 
 export function ResolverNode({ data }: Props) {
-  const { graph } = data;
+  const { graph, issues } = data;
   return (
-    <div className="rounded bg-stone-800 px-3 py-2 text-xs text-stone-100">
+    <div className={`rounded bg-stone-800 px-3 py-2 text-xs text-stone-100 ${ringClass(issues)}`}>
       <Handle type="target" position={Position.Top} />
       <div className="font-medium">{graph.label}</div>
       <Handle type="source" position={Position.Bottom} />

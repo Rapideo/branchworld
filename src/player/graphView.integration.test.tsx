@@ -28,4 +28,13 @@ describe('App Play | Graph integration', () => {
     await userEvent.click(screen.getByRole('button', { name: /play from here/i }));
     expect(screen.getByRole('heading', { name: 'The Pickup' })).toBeInTheDocument(); // player started at node 'witness'
   });
+  it('toolbar Play returns to the story start after play-from-here', async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: /graph/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'witness' }));
+    await userEvent.click(screen.getByRole('button', { name: /play from here/i }));
+    expect(screen.getByRole('heading', { name: 'The Pickup' })).toBeInTheDocument(); // at play-from node
+    await userEvent.click(screen.getByRole('button', { name: 'Play' }));             // toolbar Play (exact)
+    expect(screen.getByRole('heading', { name: 'A Booth by the Window' })).toBeInTheDocument(); // back to start
+  });
 });

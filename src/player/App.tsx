@@ -19,7 +19,7 @@ export function App() {
           {stories.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
         </select>
         <span className="ml-auto inline-flex overflow-hidden rounded border border-stone-300">
-          <button onClick={() => setView('play')} className={`px-3 py-1 ${view === 'play' ? 'bg-stone-800 text-white' : 'bg-white'}`}>Play</button>
+          <button onClick={() => { setView('play'); setStartAtNodeId(undefined); }} className={`px-3 py-1 ${view === 'play' ? 'bg-stone-800 text-white' : 'bg-white'}`}>Play</button>
           <button onClick={() => setView('graph')} className={`px-3 py-1 ${view === 'graph' ? 'bg-stone-800 text-white' : 'bg-white'}`}>Graph</button>
         </span>
       </div>

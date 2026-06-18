@@ -16,7 +16,7 @@ describe('graph node components', () => {
     render(<StoryNodeCard {...data({ id: 'a', kind: 'node', label: 'Cafe Sperl', nodeType: 'conversation' }, [{ level: 'error', code: 'X', message: 'm' }])} />);
     expect(screen.getByText('Cafe Sperl')).toBeInTheDocument();
     expect(screen.getByText(/conversation/)).toBeInTheDocument();
-    expect(screen.getByText('Cafe Sperl').closest('div')!.className).toMatch(/red/);
+    expect(screen.getByText('Cafe Sperl').closest('div')!.className).toMatch(/ring-red/);
   });
   it('EndingNode marks the default ending', () => {
     render(<EndingNode {...data({ id: 'e', kind: 'ending', label: 'In the Dark', isDefaultEnding: true })} />);

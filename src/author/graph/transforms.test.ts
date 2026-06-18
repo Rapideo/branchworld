@@ -21,6 +21,7 @@ describe('lintStatus', () => {
     const attr = attributeIssues(praterLine, lintStatus(result));
     // 'take_deal' is a choice on node_volkov (and node_volkov_truth) -> attributed to those nodes
     expect(attr.get('node_volkov')?.some((i) => i.code === 'UNDEFINED_VAR')).toBe(true);
+    expect(attr.get('node_volkov_truth')?.some((i) => i.code === 'UNDEFINED_VAR')).toBe(true);
   });
 });
 

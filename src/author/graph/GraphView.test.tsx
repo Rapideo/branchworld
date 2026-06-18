@@ -21,7 +21,8 @@ vi.mock('@xyflow/react', () => ({
 describe('GraphView', () => {
   it('renders the lint banner, time axis, and a React Flow with all graph nodes/edges', () => {
     render(<GraphView story={praterLine} onPlayFrom={() => {}} />);
-    expect(screen.getAllByText(/clean|error|warning/i).length).toBeGreaterThan(0); // LintBanner
+    const banner = screen.getAllByText(/clean|error|warning/i).find((el) => el.tagName !== 'BUTTON');
+    expect(banner).toBeInTheDocument();
     const rf = screen.getByTestId('rf');
     // nodes = story nodes + endings + events + resolver
     const expectedNodes = praterLine.nodes.length + praterLine.endings.length + praterLine.events.length + 1;

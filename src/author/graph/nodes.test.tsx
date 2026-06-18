@@ -1,13 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StoryNodeCard, EndingNode, EventBadge, ResolverNode } from './nodes';
+import type { GraphNode } from './model';
+import type { LintIssue } from '../../engine';
 
 vi.mock('@xyflow/react', () => ({
   Handle: () => null,
   Position: { Top: 'top', Bottom: 'bottom' },
 }));
 
-const data = (graph: object, issues: object[] = []) => ({ data: { graph, issues } } as never);
+const data = (graph: GraphNode, issues: LintIssue[] = []) => ({ data: { graph, issues } });
 
 describe('graph node components', () => {
   it('StoryNodeCard shows title + type and an error ring', () => {

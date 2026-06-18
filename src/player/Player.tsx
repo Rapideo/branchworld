@@ -8,8 +8,8 @@ import { EndingView } from './EndingView';
 import { SaveSlots } from './saves/SaveSlots';
 import { DebugPanel } from './debug/DebugPanel';
 
-export function Player({ story }: { story: Story }) {
-  const game = useGame(story);
+export function Player({ story, startAtNodeId }: { story: Story; startAtNodeId?: string }) {
+  const game = useGame(story, startAtNodeId);
   const [showDebug, setShowDebug] = useState(false);
   const [showSaves, setShowSaves] = useState(false);
   const { view } = game;

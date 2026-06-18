@@ -11,9 +11,12 @@ export interface UseGame {
   restore(snap: EngineSnapshot): void;
 }
 
-export function useGame(story: Story): UseGame {
+export function useGame(story: Story, startAtNodeId?: string): UseGame {
   const engineRef = useRef<GameEngine | null>(null);
-  if (engineRef.current === null) engineRef.current = new GameEngine(story);
+  if (engineRef.current === null) {
+    engineRef.current = new GameEngine(story);
+    if (startAtNodeId) engineRef.current.gotoNode(startAtNodeId);
+  }
   const [view, setView] = useState<GameView>(() => engineRef.current!.view());
 
   return {

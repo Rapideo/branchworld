@@ -8,5 +8,6 @@ export default defineConfig({
     environment: 'node',
     environmentMatchGlobs: [['src/player/**', 'jsdom'], ['**/*.test.tsx', 'jsdom']],
     setupFiles: ['./src/test/setup.ts'],
+    exclude: ['node_modules/**', '.claude/**', 'dist/**'],
   },
 });

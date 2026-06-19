@@ -35,6 +35,17 @@ export class GameEngine {
     if (!this.state.visited.includes(id)) {
       this.state = { ...this.state, visited: [...this.state.visited, id] };
     }
+    // Scheduled events fire from world-time, judged at the node we have fully arrived at
+    // (after entry effects) so any clock advance — choice OR entry effect — is seen exactly
+    // once. checkScheduledEvents marks each fired event completed, so the recursive re-entry
+    // a "present" event triggers cannot re-fire it.
+    const res = checkScheduledEvents(this.state, this.story);
+    this.state = res.state;
+    if (res.log.length) this.log.push(...res.log);
+    if (res.routedNodeId && res.routedNodeId !== id) {
+      this.enter(res.routedNodeId);
+      return;
+    }
     if (!this.ending && (n.resolvesEnding || this.state.time >= this.deadline)) {
       this.ending = resolveEnding(this.state, this.story);
       if (this.ending) this.log.push(`Ending: ${this.ending.id}`);
@@ -74,11 +85,7 @@ export class GameEngine {
       throw new Error(`Choice not available: ${choiceId}`);
     }
     this.state = applyEffects(this.state, choice.effects);
-    const res = checkScheduledEvents(this.state, this.story);
-    this.state = res.state;
-    this.log.push(...res.log);
-    const nextId = res.routedNodeId ?? choice.destination;
-    this.enter(nextId);
+    this.enter(choice.destination);
     return this.view();
   }
 

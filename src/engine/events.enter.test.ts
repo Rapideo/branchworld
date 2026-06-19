@@ -56,6 +56,6 @@ describe('scheduled events fire on enter()', () => {
 
     // Player is present at loc_canal when the clock crosses 22:30 via the entry effect -> diverts to present.
     expect(v.node.id).toBe('present');
-    expect(v.log.some((l) => l.includes('ev') && l.includes('present'))).toBe(true);
+    expect(v.log).toContain('Event ev fired (present) -> present');
   });
 });

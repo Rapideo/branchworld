@@ -182,6 +182,19 @@ describe('overlap/shadow warnings', () => {
     });
     expect(lintStory(story).warnings.map((w) => w.code)).toContain('OVERLAPPING_ENDINGS');
   });
+
+  it('does NOT warn when the two overlapping endings have distinct priorities', () => {
+    const story = mkStory({
+      variables: [{ name: 'score', type: 'number', default: 0, purpose: 's' }],
+      nodes: [{ id: 'start', title: 'S', body: '', choices: [], resolvesEnding: true }],
+      endings: [
+        { id: 'a', name: 'A', summary: '', conditions: [{ field: 'score', op: 'gte', value: '1' }], priority: 0 },
+        { id: 'b', name: 'B', summary: '', conditions: [{ field: 'score', op: 'gte', value: '5' }], priority: 10 },
+        { id: 'def', name: 'Default', summary: '', conditions: [], isDefault: true },
+      ],
+    });
+    expect(lintStory(story).warnings.map((w) => w.code)).not.toContain('OVERLAPPING_ENDINGS');
+  });
 });
 
 describe('contradicts (sound — only definite contradictions)', () => {

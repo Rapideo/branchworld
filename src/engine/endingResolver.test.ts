@@ -47,4 +47,17 @@ describe('endingResolver', () => {
     const state = { time: 0, location: 'loc_a', clues: [], inventory: [], visited: [], completedEvents: [], vars: { score: 10 } };
     expect(resolveEnding(state, story)?.id).toBe('specific');
   });
+
+  it('returns the first ending on equal non-zero priority (stable tie-break)', () => {
+    const story = mkStory({
+      variables: [{ name: 'score', type: 'number', default: 0, purpose: 's' }],
+      endings: [
+        { id: 'first', name: 'First', summary: '', conditions: [{ field: 'score', op: 'gte', value: '1' }], priority: 5 },
+        { id: 'second', name: 'Second', summary: '', conditions: [{ field: 'score', op: 'gte', value: '1' }], priority: 5 },
+        { id: 'def', name: 'Default', summary: '', conditions: [], isDefault: true },
+      ],
+    });
+    const state = { time: 0, location: 'loc_a', clues: [], inventory: [], visited: [], completedEvents: [], vars: { score: 10 } };
+    expect(resolveEnding(state, story)?.id).toBe('first');
+  });
 });

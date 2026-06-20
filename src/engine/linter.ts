@@ -2,6 +2,7 @@ import type { Story, Choice, Condition, Effect, LintResult, LintIssue } from './
 import { parseTime } from './time';
 import { collectSymbols } from './symbols';
 import type { StorySymbols } from './symbols';
+import { coerce } from './conditions';
 
 const RESERVED_FIELDS = new Set(['time', 'location']);
 const NON_VAR_EFFECT_OPS = new Set<Effect['op']>([
@@ -22,8 +23,8 @@ export function contradicts(conds: Condition[]): boolean {
     const hasTrue = cs.some((c) => c.op === 'is_true');
     const hasFalse = cs.some((c) => c.op === 'is_false');
     if (hasTrue && hasFalse) return true;
-    const eqs = cs.filter((c) => c.op === 'equals').map((c) => c.value);
-    if (new Set(eqs).size > 1) return true; // equals A and equals B, A !== B
+    const eqs = cs.filter((c) => c.op === 'equals').map((c) => coerce(c.value));
+    if (new Set(eqs).size > 1) return true; // two equals requiring different runtime values
     // numeric range emptiness: gte/gt lower vs lte/lt upper
     const lowers = cs.filter((c) => c.op === 'gte' || c.op === 'gt').map((c) => Number(c.value));
     const uppers = cs.filter((c) => c.op === 'lte' || c.op === 'lt').map((c) => Number(c.value));

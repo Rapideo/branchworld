@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { lintStory } from './linter';
+import { lintStory, contradicts, staticallyDeadChoice } from './linter';
 import type { Story } from './types';
 import { mkStory } from '../test/storyFixture';
+import { collectSymbols } from './symbols';
 
 // A clean, lint-passing minimal story.
 function clean(): Story {
@@ -165,5 +166,39 @@ describe('linter', () => {
       ],
     });
     expect(lintStory(story).errors.map((e) => e.code)).not.toContain('SOFT_LOCK');
+  });
+});
+
+describe('contradicts (sound — only definite contradictions)', () => {
+  it('flags is_true and is_false on the same field', () => {
+    expect(contradicts([{ field: 'x', op: 'is_true' }, { field: 'x', op: 'is_false' }])).toBe(true);
+  });
+  it('flags an empty numeric range (gte 5 and lt 3)', () => {
+    expect(contradicts([{ field: 'n', op: 'gte', value: '5' }, { field: 'n', op: 'lt', value: '3' }])).toBe(true);
+  });
+  it('flags equals to two genuinely different values', () => {
+    expect(contradicts([{ field: 'k', op: 'equals', value: 'A' }, { field: 'k', op: 'equals', value: 'B' }])).toBe(true);
+  });
+  it('does NOT flag equals to numerically-equal literals (5 vs 5.0)', () => {
+    expect(contradicts([{ field: 'k', op: 'equals', value: '5' }, { field: 'k', op: 'equals', value: '5.0' }])).toBe(false);
+  });
+  it('does NOT flag a satisfiable numeric range (gte 3 and lt 5)', () => {
+    expect(contradicts([{ field: 'n', op: 'gte', value: '3' }, { field: 'n', op: 'lt', value: '5' }])).toBe(false);
+  });
+});
+
+describe('staticallyDeadChoice — is_true uses num()>0, not JS truthiness', () => {
+  it('treats is_true on a var only ever set to a non-numeric string as dead', () => {
+    const story = mkStory({
+      variables: [{ name: 'status', type: 'string', default: '', purpose: 's' }],
+      nodes: [
+        { id: 'start', title: 'S', body: '', choices: [
+          { id: 'open', label: 'open', destination: 'start', effects: [{ field: 'status', op: 'set', value: 'open' }] },
+          { id: 'use', label: 'use', destination: 'start', conditions: [{ field: 'status', op: 'is_true' }] },
+        ] },
+      ],
+    });
+    const useChoice = story.nodes[0].choices[1];
+    expect(staticallyDeadChoice(useChoice, story, collectSymbols(story))).toBe(true);
   });
 });

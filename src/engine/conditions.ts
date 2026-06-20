@@ -10,7 +10,7 @@ function num(v: Primitive | undefined): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-function coerce(v: string | undefined): Primitive {
+export function coerce(v: string | undefined): Primitive {
   if (v === 'true') return true;
   if (v === 'false') return false;
   if (v != null && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);

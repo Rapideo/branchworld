@@ -3,7 +3,7 @@ import { GameEngine, lintStory, type Story } from './index';
 
 function miniGame(): Story {
   return {
-    id: 'mini', title: 'Mini', startNodeId: 'start', startTime: '15:00', deadline: '16:00',
+    id: 'mini', title: 'Mini', startNodeId: 'start', startTime: '15:00', deadline: '16:10',
     startLocation: 'Diner',
     variables: [{ name: 'knows', type: 'boolean', default: false, purpose: 'knowledge of the envelope' }],
     locations: [{ id: 'Diner', name: 'The Diner' }, { id: 'Arcade', name: 'The Arcade' }],

@@ -9,11 +9,13 @@ export function addMinutes(minutes: number, delta: number): number {
 }
 
 export function formatTime(minutes: number): string {
+  const dayOffset = Math.floor(minutes / 1440);
   const norm = ((minutes % 1440) + 1440) % 1440;
   const h = Math.floor(norm / 60);
   const mm = norm % 60;
   const ap = h < 12 ? 'AM' : 'PM';
   let h12 = h % 12;
   if (h12 === 0) h12 = 12;
-  return `${h12}:${mm < 10 ? '0' : ''}${mm} ${ap}`;
+  const suffix = dayOffset > 0 ? ` (+${dayOffset}d)` : '';
+  return `${h12}:${mm < 10 ? '0' : ''}${mm} ${ap}${suffix}`;
 }

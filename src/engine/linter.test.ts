@@ -7,7 +7,7 @@ import { collectSymbols } from './symbols';
 // A clean, lint-passing minimal story.
 function clean(): Story {
   return {
-    id: 'g', title: 'g', startNodeId: 'a', startTime: '15:00', deadline: '16:00',
+    id: 'g', title: 'g', startNodeId: 'a', startTime: '15:00', deadline: '16:30',
     startLocation: 'L',
     variables: [{ name: 'knows', type: 'boolean', default: false, purpose: 'k' }],
     locations: [{ id: 'L', name: 'Location L' }],
@@ -166,6 +166,34 @@ describe('linter', () => {
       ],
     });
     expect(lintStory(story).errors.map((e) => e.code)).not.toContain('SOFT_LOCK');
+  });
+});
+
+describe('time-literal and unwinnable-deadline rules', () => {
+  it('errors when a time literal falls outside [startTime, deadline] (TIME_LITERAL_OUT_OF_RANGE)', () => {
+    const story = mkStory({
+      startTime: '20:00', deadline: '23:00',
+      nodes: [{ id: 'start', title: 'S', body: '', choices: [
+        { id: 'c', label: 'After 1am?', destination: 'start',
+          conditions: [{ field: 'time', op: 'time_after', value: '01:00' }] }, // 60 min, far below the 20:00 start
+      ] }],
+    });
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('TIME_LITERAL_OUT_OF_RANGE');
+  });
+
+  it('errors when the shortest reachable path already exceeds the deadline (DEADLINE_UNWINNABLE)', () => {
+    const story = mkStory({
+      startTime: '20:00', deadline: '20:30', // 30-min window
+      nodes: [
+        { id: 'start', title: 'S', body: '', choices: [
+          { id: 'go', label: 'Long walk', destination: 'end', effects: [{ field: 'time', op: 'add_minutes', value: '60' }] }],
+        },
+        { id: 'end', title: 'E', body: '', choices: [], resolvesEnding: true },
+      ],
+    });
+    const res = lintStory(story);
+    expect(res.errors.map((e) => e.code)).toContain('DEADLINE_UNWINNABLE');
+    expect(res.ok).toBe(false);
   });
 });
 

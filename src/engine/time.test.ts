@@ -18,4 +18,8 @@ describe('time', () => {
     expect(formatTime(0)).toBe('12:00 AM');
     expect(formatTime(720)).toBe('12:00 PM');
   });
+  it('renders a day offset for times at or beyond 24h so distinct absolute times differ', () => {
+    expect(formatTime(120)).toBe('2:00 AM');
+    expect(formatTime(120 + 1440)).toBe('2:00 AM (+1d)');
+  });
 });

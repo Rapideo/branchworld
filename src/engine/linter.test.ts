@@ -133,4 +133,37 @@ describe('linter', () => {
     });
     expect(lintStory(story).errors.map((e) => e.code)).toContain('UNDEFINED_LOCATION');
   });
+
+  it('flags a node whose only exit is gated on a never-true flag as SOFT_LOCK', () => {
+    const story = mkStory({
+      variables: [{ name: 'keycard', type: 'boolean', default: false, purpose: 'has keycard' }],
+      nodes: [
+        { id: 'start', title: 'S', body: '', choices: [
+          { id: 'enter', label: 'Enter vault', destination: 'vault' },
+        ] },
+        { id: 'vault', title: 'Vault', body: '', choices: [
+          { id: 'leave', label: 'Leave', destination: 'start',
+            conditions: [{ field: 'keycard', op: 'is_true' }] }, // keycard is never set true anywhere
+        ] },
+      ],
+    });
+    const res = lintStory(story);
+    expect(res.errors.map((e) => e.code)).toContain('SOFT_LOCK');
+  });
+
+  it('does NOT flag a node whose gate CAN be satisfied (no false positive)', () => {
+    const story = mkStory({
+      variables: [{ name: 'keycard', type: 'boolean', default: false, purpose: 'has keycard' }],
+      nodes: [
+        { id: 'start', title: 'S', body: '', choices: [
+          { id: 'grab', label: 'Grab keycard', destination: 'vault',
+            effects: [{ field: 'keycard', op: 'set', value: 'true' }] },
+        ] },
+        { id: 'vault', title: 'Vault', body: '', choices: [
+          { id: 'leave', label: 'Leave', destination: 'start', conditions: [{ field: 'keycard', op: 'is_true' }] },
+        ] },
+      ],
+    });
+    expect(lintStory(story).errors.map((e) => e.code)).not.toContain('SOFT_LOCK');
+  });
 });

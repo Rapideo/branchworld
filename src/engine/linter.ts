@@ -1,12 +1,51 @@
 import type { Story, Choice, Condition, Effect, LintResult, LintIssue } from './types';
 import { parseTime } from './time';
 import { collectSymbols } from './symbols';
+import type { StorySymbols } from './symbols';
 
 const RESERVED_FIELDS = new Set(['time', 'location']);
 const NON_VAR_EFFECT_OPS = new Set<Effect['op']>([
   'add_clue', 'remove_clue', 'add_item', 'remove_item',
   'change_location', 'add_minutes', 'mark_event_completed', 'mark_visited',
 ]);
+
+// Sound contradiction detector over an AND-list (returns true only for definite contradictions).
+// Exported so Task 4 can reuse it for ending-overlap checks.
+export function contradicts(conds: Condition[]): boolean {
+  const byField = new Map<string, Condition[]>();
+  for (const c of conds) {
+    const a = byField.get(c.field) ?? [];
+    a.push(c);
+    byField.set(c.field, a);
+  }
+  for (const [, cs] of byField) {
+    const hasTrue = cs.some((c) => c.op === 'is_true');
+    const hasFalse = cs.some((c) => c.op === 'is_false');
+    if (hasTrue && hasFalse) return true;
+    const eqs = cs.filter((c) => c.op === 'equals').map((c) => c.value);
+    if (new Set(eqs).size > 1) return true; // equals A and equals B, A !== B
+    // numeric range emptiness: gte/gt lower vs lte/lt upper
+    const lowers = cs.filter((c) => c.op === 'gte' || c.op === 'gt').map((c) => Number(c.value));
+    const uppers = cs.filter((c) => c.op === 'lte' || c.op === 'lt').map((c) => Number(c.value));
+    if (lowers.length && uppers.length && Math.max(...lowers) > Math.min(...uppers)) return true;
+  }
+  return false;
+}
+
+// A choice is statically dead only when we can PROVE no reachable state satisfies it.
+// Sound: when unsure, returns false. Zero false positives is the hard requirement.
+export function staticallyDeadChoice(c: Choice, story: Story, sym: StorySymbols): boolean {
+  const conds = c.conditions ?? [];
+  if (conds.length === 0) return false; // unconditional choice is always live
+  // (1) internal contradiction within this choice's own AND-list
+  if (contradicts(conds)) return true;
+  // (2) requires a clue nothing can produce, OR a var nothing can make truthy
+  for (const k of conds) {
+    if (k.op === 'has_clue' && !sym.producibleClues.has(k.value ?? k.field)) return true;
+    if (k.op === 'is_true' && story.variables.some((v) => v.name === k.field) && !sym.canBecomeTruthy.has(k.field)) return true;
+  }
+  return false;
+}
 
 function choiceMinutes(c: Choice): number {
   return (c.effects || [])
@@ -81,10 +120,16 @@ export function lintStory(story: Story): LintResult {
     }
   }
 
-  // no-exit nodes
+  // no-exit nodes + soft-lock detection
   for (const n of story.nodes) {
-    if ((n.choices?.length ?? 0) === 0 && !n.resolvesEnding) {
+    if (n.resolvesEnding) continue;
+    const choices = n.choices ?? [];
+    if (choices.length === 0) {
       err('NO_EXIT', `Node ${n.id} has no choices and does not resolve an ending`, n.id);
+      continue;
+    }
+    if (choices.every((c) => staticallyDeadChoice(c, story, sym))) {
+      err('SOFT_LOCK', `Node ${n.id} has no escapable exit — every choice is permanently locked`, n.id);
     }
   }
 

@@ -6,7 +6,7 @@ function miniGame(): Story {
     id: 'mini', title: 'Mini', startNodeId: 'start', startTime: '15:00', deadline: '16:00',
     startLocation: 'Diner',
     variables: [{ name: 'knows', type: 'boolean', default: false, purpose: 'knowledge of the envelope' }],
-    locations: [],
+    locations: [{ id: 'Diner', name: 'The Diner' }, { id: 'Arcade', name: 'The Arcade' }],
     events: [{
       id: 'E', title: 'pickup',
       trigger: [{ field: 'time', op: 'time_after', value: '15:30' }],

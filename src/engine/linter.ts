@@ -1,5 +1,6 @@
 import type { Story, Choice, Condition, Effect, LintResult, LintIssue } from './types';
 import { parseTime } from './time';
+import { collectSymbols } from './symbols';
 
 const RESERVED_FIELDS = new Set(['time', 'location']);
 const NON_VAR_EFFECT_OPS = new Set<Effect['op']>([
@@ -60,6 +61,7 @@ export function lintStory(story: Story): LintResult {
   const nodeIds = new Set(story.nodes.map((n) => n.id));
   const endingIds = new Set(story.endings.map((e) => e.id));
   const varNames = new Set(story.variables.map((v) => v.name));
+  const sym = collectSymbols(story);
 
   // duplicate node ids
   const seen = new Set<string>();
@@ -90,7 +92,13 @@ export function lintStory(story: Story): LintResult {
   const checkConds = (cs: Condition[] | undefined, where: string) => {
     for (const c of cs || []) {
       if (RESERVED_FIELDS.has(c.field)) continue;
-      if (c.op === 'has_clue' || c.op === 'has_visited' || c.op.startsWith('time_')) continue;
+      if (c.op === 'has_clue') {
+        const clue = c.value ?? c.field;
+        if (!sym.producibleClues.has(clue)) err('DEAD_CLUE_REFERENCE',
+          `Condition requires clue '${clue}' that no add_clue effect can produce`, where);
+        continue;
+      }
+      if (c.op === 'has_visited' || c.op.startsWith('time_')) continue;
       if (!varNames.has(c.field)) err('UNDEFINED_VAR', `Condition references undefined variable: ${c.field}`, where);
     }
   };
@@ -113,6 +121,27 @@ export function lintStory(story: Story): LintResult {
     checkEffs(ev.ifAbsentEffects, ev.id);
   }
   for (const en of story.endings) checkConds(en.conditions, en.id);
+
+  // UNDEFINED_LOCATION — change_location effects and eventLocation fields
+  const checkLocations = (es: Effect[] | undefined, where: string) => {
+    for (const e of es || []) {
+      if (e.op === 'change_location' && e.value && !sym.locationIds.has(e.value)) {
+        err('UNDEFINED_LOCATION', `Effect sets location to undefined id: ${e.value}`, where);
+      }
+    }
+  };
+  for (const n of story.nodes) {
+    checkLocations(n.entryEffects, n.id);
+    for (const c of n.choices || []) checkLocations(c.effects, c.id);
+  }
+  for (const ev of story.events) {
+    if (!sym.locationIds.has(ev.eventLocation)) {
+      err('UNDEFINED_LOCATION', `Event ${ev.id} eventLocation ${ev.eventLocation} is not a defined location`, ev.id);
+    }
+  }
+  if (!sym.locationIds.has(story.startLocation)) {
+    err('UNDEFINED_LOCATION', `startLocation ${story.startLocation} is not a defined location`);
+  }
 
   // reachability
   const reachable = computeReachable(story);

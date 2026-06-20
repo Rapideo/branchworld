@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { lintStory } from './linter';
 import type { Story } from './types';
+import { mkStory } from '../test/storyFixture';
 
 // A clean, lint-passing minimal story.
 function clean(): Story {
@@ -8,7 +9,7 @@ function clean(): Story {
     id: 'g', title: 'g', startNodeId: 'a', startTime: '15:00', deadline: '16:00',
     startLocation: 'L',
     variables: [{ name: 'knows', type: 'boolean', default: false, purpose: 'k' }],
-    locations: [],
+    locations: [{ id: 'L', name: 'Location L' }],
     events: [{
       id: 'E', title: 'e',
       trigger: [{ field: 'time', op: 'time_after', value: '15:30' }],
@@ -83,5 +84,31 @@ describe('linter', () => {
     s.nodes.push({ id: 'orphan', title: 'O', body: 'o', resolvesEnding: true, choices: [] });
     const r = lintStory(s);
     expect(r.warnings.some((w) => w.code === 'UNREACHABLE_NODE')).toBe(true);
+  });
+
+  it('flags a has_clue condition for a clue nothing ever adds (DEAD_CLUE_REFERENCE)', () => {
+    const story = mkStory({
+      nodes: [
+        { id: 'start', title: 'S', body: '', choices: [
+          { id: 'c', label: 'Use key', destination: 'start',
+            conditions: [{ field: 'keycard', op: 'has_clue' }] }, // no effect ever adds 'keycard'
+        ] },
+      ],
+    });
+    const res = lintStory(story);
+    expect(res.errors.map((e) => e.code)).toContain('DEAD_CLUE_REFERENCE');
+  });
+
+  it('flags a change_location to an undefined location id (UNDEFINED_LOCATION)', () => {
+    const story = mkStory({
+      nodes: [
+        { id: 'start', title: 'S', body: '', choices: [
+          { id: 'c', label: 'Go', destination: 'start',
+            effects: [{ field: 'location', op: 'change_location', value: 'loc_nowhere' }] },
+        ] },
+      ],
+    });
+    const res = lintStory(story);
+    expect(res.errors.map((e) => e.code)).toContain('UNDEFINED_LOCATION');
   });
 });

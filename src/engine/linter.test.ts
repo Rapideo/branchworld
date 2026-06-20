@@ -75,7 +75,7 @@ describe('linter', () => {
 
   it('flags a clock that cannot bite', () => {
     const s = clean();
-    s.nodes[0].choices[0].effects = [{ field: 'time', op: 'add_minutes', value: '5' }]; // window is 60 min
+    s.nodes[0].choices[0].effects = [{ field: 'time', op: 'add_minutes', value: '5' }]; // max path is 5 min, well under the 90-min window
     const r = lintStory(s);
     expect(r.errors.some((e) => e.code === 'CLOCK_CANNOT_BITE')).toBe(true);
   });
@@ -177,6 +177,17 @@ describe('time-literal and unwinnable-deadline rules', () => {
         { id: 'c', label: 'After 1am?', destination: 'start',
           conditions: [{ field: 'time', op: 'time_after', value: '01:00' }] }, // 60 min, far below the 20:00 start
       ] }],
+    });
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('TIME_LITERAL_OUT_OF_RANGE');
+  });
+
+  it('errors on a time_between whose second bound is outside [startTime, deadline]', () => {
+    const story = mkStory({
+      startTime: '20:00', deadline: '23:00',
+      nodes: [{ id: 'start', title: 'S', body: '', choices: [
+        { id: 'c', label: '', destination: 'start',
+          conditions: [{ field: 'time', op: 'time_between', value: '21:00-01:00' }] },
+      ]}],
     });
     expect(lintStory(story).errors.map((e) => e.code)).toContain('TIME_LITERAL_OUT_OF_RANGE');
   });

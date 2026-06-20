@@ -111,4 +111,26 @@ describe('linter', () => {
     const res = lintStory(story);
     expect(res.errors.map((e) => e.code)).toContain('UNDEFINED_LOCATION');
   });
+
+  it('flags an undefined startLocation (UNDEFINED_LOCATION)', () => {
+    const story = mkStory({ startLocation: 'loc_ghost' }); // only loc_a is defined
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('UNDEFINED_LOCATION');
+  });
+
+  it('flags an event eventLocation that is not a defined location (UNDEFINED_LOCATION)', () => {
+    const story = mkStory({
+      variables: [{ name: 'seen', type: 'boolean', default: false, purpose: 'x' }],
+      nodes: [
+        { id: 'start', title: 'S', body: '', choices: [{ id: 'go', label: 'go', destination: 'p' }] },
+        { id: 'p', title: 'P', body: '', choices: [], resolvesEnding: true },
+        { id: 'rec', title: 'R', body: '', choices: [], resolvesEnding: true },
+      ],
+      events: [{
+        id: 'ev', title: 'E', trigger: [{ field: 'time', op: 'time_after', value: '20:30' }],
+        eventLocation: 'loc_ghost', ifPresentNode: 'p',
+        ifAbsentEffects: [{ field: 'seen', op: 'set', value: 'true' }], recoveryNodeId: 'rec',
+      }],
+    });
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('UNDEFINED_LOCATION');
+  });
 });

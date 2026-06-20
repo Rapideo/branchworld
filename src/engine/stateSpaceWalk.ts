@@ -162,8 +162,8 @@ export function walkStateSpace(story: Story, opts?: { cap?: number }): WalkRepor
   return {
     statesExplored: w.visited.size,
     capHit: w.capHit,
-    zeroEnding: w.zeroEnding.map((n) => n.snap.currentId),
-    softlocks: w.softlocks.map((n) => n.snap.currentId),
+    zeroEnding: [...new Set(w.zeroEnding.map((n) => n.view.endingReached?.id ?? n.snap.currentId))],
+    softlocks: [...new Set(w.softlocks.map((n) => n.snap.currentId))],
     orphanNodes: findOrphanNodes(w),
     orphanEndings: findOrphanEndings(w),
     deadChoices: findDeadChoices(w),

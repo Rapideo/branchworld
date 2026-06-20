@@ -254,6 +254,18 @@ describe('contradicts (sound — only definite contradictions)', () => {
   });
 });
 
+describe('TYPE_MISMATCH — numeric ops on declared variables', () => {
+  it('flags a numeric comparison against a non-numeric literal (TYPE_MISMATCH)', () => {
+    const story = mkStory({
+      variables: [{ name: 'score', type: 'number', default: 0, purpose: 's' }],
+      nodes: [{ id: 'start', title: 'S', body: '', choices: [
+        { id: 'c', label: 'x', destination: 'start', conditions: [{ field: 'score', op: 'gt', value: 'banana' }] }],
+      }],
+    });
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('TYPE_MISMATCH');
+  });
+});
+
 describe('staticallyDeadChoice — is_true uses num()>0, not JS truthiness', () => {
   it('treats is_true on a var only ever set to a non-numeric string as dead', () => {
     const story = mkStory({

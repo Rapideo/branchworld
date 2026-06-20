@@ -168,6 +168,27 @@ export function lintStory(story: Story): LintResult {
   }
   for (const en of story.endings) checkConds(en.conditions, en.id);
 
+  // TYPE_MISMATCH — numeric ops on non-number-typed variables or non-numeric literals
+  const varType = new Map(story.variables.map((v) => [v.name, v.type]));
+  const NUMERIC_OPS = new Set(['gt', 'gte', 'lt', 'lte']);
+  const checkCondTypes = (cs: Condition[] | undefined, where: string) => {
+    for (const c of cs || []) {
+      const t = varType.get(c.field);
+      if (!t) continue; // undefined-var already reported; reserved fields (no entry in map) skip
+      if (NUMERIC_OPS.has(c.op)) {
+        if (t !== 'number') err('TYPE_MISMATCH', `${c.op} on non-number variable '${c.field}' (declared ${t})`, where);
+        else if (c.value != null && !/^-?\d+(\.\d+)?$/.test(c.value))
+          err('TYPE_MISMATCH', `${c.op} on '${c.field}' compares against non-numeric literal '${c.value}'`, where);
+      }
+    }
+  };
+  for (const n of story.nodes) {
+    checkCondTypes(n.conditions, n.id);
+    for (const c of n.choices || []) checkCondTypes(c.conditions, c.id);
+  }
+  for (const ev of story.events) checkCondTypes(ev.trigger, ev.id);
+  for (const en of story.endings) checkCondTypes(en.conditions, en.id);
+
   // UNDEFINED_LOCATION — change_location effects and eventLocation fields
   const checkLocations = (es: Effect[] | undefined, where: string) => {
     for (const e of es || []) {

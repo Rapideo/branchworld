@@ -206,6 +206,22 @@ export function lintStory(story: Story): LintResult {
     err('DEFAULT_HAS_CONDITIONS', 'Default ending must have no conditions');
   }
 
+  // overlap/shadow warnings — warn when we cannot prove two non-default endings are mutually exclusive
+  const nonDefault = story.endings.filter((e) => !e.isDefault);
+  for (let i = 0; i < nonDefault.length; i++) {
+    for (let j = i + 1; j < nonDefault.length; j++) {
+      const a = nonDefault[i], b = nonDefault[j];
+      if (!contradicts([...(a.conditions ?? []), ...(b.conditions ?? [])])) {
+        const aPri = a.priority ?? 0, bPri = b.priority ?? 0;
+        if (aPri === bPri) {
+          warn('OVERLAPPING_ENDINGS',
+            `Endings '${a.id}' and '${b.id}' can both be satisfied and share priority ${aPri}; ` +
+            `resolution falls back to array order. Set distinct priorities to make intent explicit.`, a.id);
+        }
+      }
+    }
+  }
+
   // scheduled event integrity
   for (const ev of story.events) {
     if (!nodeIds.has(ev.ifPresentNode)) err('EVENT_PRESENT_NODE_MISSING', `Event ${ev.id} ifPresentNode ${ev.ifPresentNode} missing`, ev.id);

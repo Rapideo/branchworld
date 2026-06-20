@@ -3,10 +3,13 @@ import { GameEngine, lintStory } from '../engine';
 import { sampleStory } from './sampleStory';
 
 describe('sampleStory', () => {
-  it('lints clean with no warnings', () => {
+  it('lints clean with no errors (OVERLAPPING_ENDINGS warnings are expected and ok)', () => {
     const r = lintStory(sampleStory);
+    expect(r.ok).toBe(true);
     expect(r.errors).toEqual([]);
-    expect(r.warnings).toEqual([]);
+    // OVERLAPPING_ENDINGS warnings are expected: sampleStory endings have no priorities set.
+    const unexpectedWarnings = r.warnings.filter((w) => w.code !== 'OVERLAPPING_ENDINGS');
+    expect(unexpectedWarnings).toEqual([]);
   });
   it('present path reaches the witnessed ending', () => {
     const g = new GameEngine(sampleStory);

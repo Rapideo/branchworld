@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolveEnding } from './endingResolver';
 import type { Story, WorldState } from './types';
+import { mkStory } from '../test/storyFixture';
 
 function storyWith(endings: Story['endings']): Story {
   return {
@@ -32,5 +33,18 @@ describe('endingResolver', () => {
     ]);
     expect(resolveEnding(s({ score: 9 }), reordered)?.id).toBe('win');
     expect(resolveEnding(s({ score: 0 }), reordered)?.id).toBe('default');
+  });
+
+  it('prefers the higher-priority ending when two conditions are both satisfied', () => {
+    const story = mkStory({
+      variables: [{ name: 'score', type: 'number', default: 0, purpose: 's' }],
+      endings: [
+        { id: 'broad', name: 'Broad', summary: '', conditions: [{ field: 'score', op: 'gte', value: '1' }], priority: 0 },
+        { id: 'specific', name: 'Specific', summary: '', conditions: [{ field: 'score', op: 'gte', value: '5' }], priority: 10 },
+        { id: 'def', name: 'Default', summary: '', conditions: [], isDefault: true },
+      ],
+    });
+    const state = { time: 0, location: 'loc_a', clues: [], inventory: [], visited: [], completedEvents: [], vars: { score: 10 } };
+    expect(resolveEnding(state, story)?.id).toBe('specific');
   });
 });

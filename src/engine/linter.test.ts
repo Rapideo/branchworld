@@ -264,6 +264,27 @@ describe('TYPE_MISMATCH — numeric ops on declared variables', () => {
     });
     expect(lintStory(story).errors.map((e) => e.code)).toContain('TYPE_MISMATCH');
   });
+
+  it('flags a numeric op on a non-number-typed declared variable (TYPE_MISMATCH)', () => {
+    const story = mkStory({
+      variables: [{ name: 'status', type: 'string', default: '', purpose: 's' }],
+      nodes: [{ id: 'start', title: 'S', body: '', choices: [
+        { id: 'c', label: 'x', destination: 'start', conditions: [{ field: 'status', op: 'gt', value: '3' }] }],
+      }],
+    });
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('TYPE_MISMATCH');
+  });
+
+  it('does NOT flag a valid numeric op (integer or negative decimal) on a number variable', () => {
+    const story = mkStory({
+      variables: [{ name: 'score', type: 'number', default: 0, purpose: 's' }],
+      nodes: [{ id: 'start', title: 'S', body: '', choices: [
+        { id: 'a', label: 'a', destination: 'start', conditions: [{ field: 'score', op: 'gte', value: '3' }] },
+        { id: 'b', label: 'b', destination: 'start', conditions: [{ field: 'score', op: 'gt', value: '-1.5' }] }],
+      }],
+    });
+    expect(lintStory(story).errors.map((e) => e.code)).not.toContain('TYPE_MISMATCH');
+  });
 });
 
 describe('staticallyDeadChoice — is_true uses num()>0, not JS truthiness', () => {

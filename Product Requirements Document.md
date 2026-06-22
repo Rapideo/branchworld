@@ -2742,6 +2742,29 @@ the linter flags overloading — §EE-5).
 
 ---
 
+## 19.10 Numeric bounds & Resources (engine v1.3)
+
+### Numeric bounds & Resources (engine v1.3)
+
+**Bounds.** A `VariableDef` may declare `min` and/or `max`. The engine clamps the result of every
+`set`/`increment`/`decrement` into range. Variables without bounds are unclamped (back-compatible).
+Authors should bound any numeric the walker must keep finite (trust, suspicion, heat).
+
+**Resources (opt-in).** `Story.resources?: Resource[]`. A resource is a bounded number stored in world
+state (usable in any condition/effect) with:
+- `min`, `max`, `start`.
+- optional `depletion: { everyMinutes, amount }` — **time-driven**: the value is recomputed from the
+  clock as `clamp(start - amount * floor((time - startTime) / everyMinutes))`. Because it is a pure
+  function of time, it adds no new state-space dimension. A time-driven resource must NOT be written by
+  any effect (linted). A resource without `depletion` is **choice-driven**: changed only by effects, clamped.
+- optional `atZero: { ending?, setFlag? }` — when the value reaches `min`, the engine resolves to
+  `ending` (if not already ended) and/or sets `setFlag` true.
+- optional `label`, `hidden` for an optional player meter.
+
+Deferred (not in v1.3): per-node depletion, an arbitrary at-zero effect, regeneration via negative drain.
+
+---
+
 # 20. Engine Runtime Logic
 
 ## 20.1 Basic Runtime Loop

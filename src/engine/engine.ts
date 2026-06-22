@@ -6,12 +6,14 @@ import { checkScheduledEvents } from './scheduledEvents';
 import { resolveEnding } from './endingResolver';
 import { parseTime, formatTime } from './time';
 import { buildBounds, type BoundsMap } from './bounds';
+import { applyResourceStep } from './resources';
 
 export class GameEngine {
   private story: Story;
   private state: WorldState;
   private currentId: string;
   private deadline: number;
+  private startTime: number;
   private bounds: BoundsMap;
   private log: string[] = [];
   private ending?: Ending;
@@ -21,6 +23,7 @@ export class GameEngine {
     this.state = initState(story);
     this.currentId = story.startNodeId;
     this.deadline = parseTime(story.deadline);
+    this.startTime = parseTime(story.startTime);
     this.bounds = buildBounds(story);
     this.enter(this.currentId);
   }
@@ -48,6 +51,17 @@ export class GameEngine {
     if (res.routedNodeId && res.routedNodeId !== id) {
       this.enter(res.routedNodeId);
       return;
+    }
+    // Resource depletion + at-zero, after any clock advance is settled at this node.
+    const rstep = applyResourceStep(this.state, this.story, this.startTime);
+    this.state = rstep.state;
+    if (rstep.log.length) this.log.push(...rstep.log);
+    if (!this.ending && rstep.atZeroEndingId) {
+      const e = this.story.endings.find((x) => x.id === rstep.atZeroEndingId);
+      if (e) {
+        this.ending = e;
+        this.log.push(`Ending: ${e.id}`);
+      }
     }
     if (!this.ending && (n.resolvesEnding || this.state.time >= this.deadline)) {
       this.ending = resolveEnding(this.state, this.story);

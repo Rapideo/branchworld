@@ -110,3 +110,41 @@ describe('GameEngine — clamping end-to-end', () => {
     expect(v.state.vars.heat).toBe(4); // 4 + 10 clamped to max 4
   });
 });
+
+describe('GameEngine — resource at-zero ends the game', () => {
+  function caveStory(): Story {
+    return {
+      id: 'cave', title: 'cave', startNodeId: 'crawl', startTime: '15:00', deadline: '20:00', startLocation: 'L',
+      variables: [{ name: 'dead', type: 'boolean', default: false, purpose: 'd' }],
+      locations: [],
+      events: [],
+      resources: [{
+        id: 'lamp', min: 0, max: 4, start: 4,
+        depletion: { everyMinutes: 30, amount: 1 },
+        atZero: { ending: 'ending_dark', setFlag: 'dead' },
+      }],
+      nodes: [
+        { id: 'crawl', title: 'Crawl', body: 'dark', choices: [
+          { id: 'press', label: 'press on', destination: 'crawl2',
+            effects: [{ field: 'time', op: 'add_minutes', value: '60' }] },
+        ] },
+        { id: 'crawl2', title: 'Crawl2', body: 'darker', choices: [
+          { id: 'press2', label: 'press on', destination: 'surface',
+            effects: [{ field: 'time', op: 'add_minutes', value: '90' }] },
+        ] },
+        { id: 'surface', title: 'Surface', body: 'daylight', resolvesEnding: true, choices: [] },
+      ],
+      endings: [
+        { id: 'ending_dark', name: 'The Cave Keeps You', summary: 'lamp died', conditions: [{ field: 'dead', op: 'is_true' }] },
+        { id: 'ending_out', name: 'Daylight', summary: 'made it', conditions: [], isDefault: true },
+      ],
+    } as unknown as Story;
+  }
+  it('lamp dies after 120 min -> dark ending, not the surface', () => {
+    const g = new GameEngine(caveStory());
+    g.choose('press');          // +60 -> 16:00, lamp 2
+    const v = g.choose('press2'); // +90 -> 17:30, lamp 0 -> at-zero ending fires before surface resolves
+    expect(v.endingReached?.id).toBe('ending_dark');
+    expect(v.state.vars.dead).toBe(true);
+  });
+});

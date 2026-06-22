@@ -2744,8 +2744,6 @@ the linter flags overloading — §EE-5).
 
 ## 19.10 Numeric bounds & Resources (engine v1.3)
 
-### Numeric bounds & Resources (engine v1.3)
-
 **Bounds.** A `VariableDef` may declare `min` and/or `max`. The engine clamps the result of every
 `set`/`increment`/`decrement` into range. Variables without bounds are unclamped (back-compatible).
 Authors should bound any numeric the walker must keep finite (trust, suspicion, heat).

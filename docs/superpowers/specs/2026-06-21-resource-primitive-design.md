@@ -79,27 +79,27 @@ interface Resource {
   id: string;            // lives in WorldState.vars[id] as a number -> usable in any condition/effect
   label?: string;        // for the player meter
   min: number; max: number; start: number;
-  depletion?: { per: 'minutes' | 'node'; amount: number };
-  atZero?: { ending?: string; setFlag?: string; effect?: Effect };
+  depletion?: { everyMinutes: number; amount: number };  // present => time-driven (recomputed from the clock)
+  atZero?: { ending?: string; setFlag?: string };
   hidden?: boolean;      // omit from the player meter (still shown in debug)
 }
 interface Story { /* ...existing... */ resources?: Resource[]; }
 ```
 
-**Two depletion modes (chosen for walker-friendliness):**
-- **Time-driven** (`per:'minutes'`): the engine *recomputes* the value each step as
-  `clamp(start - amount * floor((time - startTime) / period), min, max)`. It is a pure function of the
+**Two depletion modes (chosen for walker-friendliness) — as shipped in v1.3:**
+- **Time-driven** (has `depletion: { everyMinutes, amount }`): the engine *recomputes* the value each step as
+  `clamp(start - amount * floor((time - startTime) / everyMinutes), min, max)`. It is a pure function of the
   clock -> **adds no new walker dimension** (the cave's dying lamp is free). Choice effects may NOT modify
-  a time-driven resource (it is a gauge of time); the linter enforces this.
-- **Choice-driven** (no `depletion`, or `per:'node'`): a stored value, changed by effects (and by a fixed
-  per-scene decrement for `per:'node'`), clamped to `[min,max]`. Adds a *bounded* walker dimension.
+  a time-driven resource (it is a gauge of time); the linter enforces this (`RESOURCE_TIME_DRIVEN_WRITTEN`).
+- **Choice-driven** (no `depletion`): a stored value, changed by effects, clamped to `[min,max]`. Adds a
+  *bounded* walker dimension. (A per-node auto-decrement mode is deferred — see §6.)
 
 **At-zero behavior** fires once when a resource reaches `min`, evaluated in `enter()` after depletion:
 - `ending: <id>` -> resolve to that ending immediately (new resolution trigger alongside deadline /
   `resolvesEnding`). The cave's lamp: `atZero:{ending:'ending_cave_keeps_you'}` -- dark = death,
   deterministically at the computable moment the lamp dies.
 - `setFlag: <name>` -> set a boolean other content reacts to.
-- `effect: <Effect>` -> run one arbitrary effect.
+- (An arbitrary at-zero `effect` is deferred — see §6.)
 - **Default (omitted): none** -- authors gate risky choices via a normal condition on the resource
   (`{field:'lamp_charge', op:'gt', value:'0'}`). (Revised from the proposal's "block": conditions already
   express blocking precisely; an ill-defined automatic "block" is not worth the magic.)

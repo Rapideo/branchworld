@@ -37,4 +37,14 @@ describe('effects', () => {
     expect(out.vars.trust).toBe(2);
     expect(out.time).toBe(910);
   });
+  it('clamps increment/decrement/set when bounds are supplied', () => {
+    const bounds = { trust: { min: 0, max: 4 } };
+    expect(applyEffect(base, { field: 'trust', op: 'increment', value: '10' }, bounds).vars.trust).toBe(4);
+    const low = { ...base, vars: { ...base.vars, trust: 0 } };
+    expect(applyEffect(low, { field: 'trust', op: 'decrement', value: '5' }, bounds).vars.trust).toBe(0);
+    expect(applyEffect(base, { field: 'trust', op: 'set', value: '99' }, bounds).vars.trust).toBe(4);
+  });
+  it('does not clamp when no bound is supplied (back-compat)', () => {
+    expect(applyEffect(base, { field: 'trust', op: 'increment', value: '10' }).vars.trust).toBe(11);
+  });
 });

@@ -81,12 +81,21 @@ export interface Ending {
   isDefault?: boolean;
 }
 
+export interface Resource {
+  id: string;
+  min: number;
+  max: number;
+  start: number;
+}
+
 export interface VariableDef {
   name: string;
   type: 'boolean' | 'number' | 'string';
   default: Primitive;
   purpose: string;              // single semantic meaning
   label?: string;
+  min?: number;                 // optional numeric lower bound (clamped by the engine)
+  max?: number;                 // optional numeric upper bound (clamped by the engine)
 }
 
 export interface Story {
@@ -101,6 +110,7 @@ export interface Story {
   locations: Location[];
   events: ScheduledEvent[];
   endings: Ending[];            // ordered; exactly one isDefault with empty conditions
+  resources?: Resource[];
 }
 
 export interface WorldState {

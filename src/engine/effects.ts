@@ -1,5 +1,7 @@
 import type { Effect, WorldState, Primitive } from './types';
 import { addMinutes } from './time';
+import type { BoundsMap } from './bounds';
+import { clampValue } from './bounds';
 
 function num(v: Primitive | undefined): number {
   if (typeof v === 'number') return v;
@@ -20,14 +22,21 @@ function uniqPush(arr: string[], x: string): string[] {
   return arr.includes(x) ? arr : [...arr, x];
 }
 
-export function applyEffect(s: WorldState, e: Effect): WorldState {
+export function applyEffect(s: WorldState, e: Effect, bounds?: BoundsMap): WorldState {
   switch (e.op) {
-    case 'set':
-      return { ...s, vars: { ...s.vars, [e.field]: coerce(e.value) } };
-    case 'increment':
-      return { ...s, vars: { ...s.vars, [e.field]: num(s.vars[e.field]) + num(coerce(e.value ?? '1')) } };
-    case 'decrement':
-      return { ...s, vars: { ...s.vars, [e.field]: num(s.vars[e.field]) - num(coerce(e.value ?? '1')) } };
+    case 'set': {
+      const v = coerce(e.value);
+      const out = typeof v === 'number' ? clampValue(v, bounds?.[e.field]) : v;
+      return { ...s, vars: { ...s.vars, [e.field]: out } };
+    }
+    case 'increment': {
+      const v = num(s.vars[e.field]) + num(coerce(e.value ?? '1'));
+      return { ...s, vars: { ...s.vars, [e.field]: clampValue(v, bounds?.[e.field]) } };
+    }
+    case 'decrement': {
+      const v = num(s.vars[e.field]) - num(coerce(e.value ?? '1'));
+      return { ...s, vars: { ...s.vars, [e.field]: clampValue(v, bounds?.[e.field]) } };
+    }
     case 'add_clue':
       return { ...s, clues: uniqPush(s.clues, e.value ?? e.field) };
     case 'remove_clue':
@@ -49,7 +58,7 @@ export function applyEffect(s: WorldState, e: Effect): WorldState {
   }
 }
 
-export function applyEffects(s: WorldState, es: Effect[] | undefined): WorldState {
+export function applyEffects(s: WorldState, es: Effect[] | undefined, bounds?: BoundsMap): WorldState {
   if (!es) return s;
-  return es.reduce((acc, e) => applyEffect(acc, e), s);
+  return es.reduce((acc, e) => applyEffect(acc, e, bounds), s);
 }

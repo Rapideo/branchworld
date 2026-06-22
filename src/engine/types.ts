@@ -81,11 +81,25 @@ export interface Ending {
   isDefault?: boolean;
 }
 
+export interface ResourceDepletion {
+  everyMinutes: number;   // time-driven: lose `amount` every `everyMinutes` of clock
+  amount: number;
+}
+
+export interface ResourceAtZero {
+  ending?: string;        // resolve to this ending when the resource reaches min
+  setFlag?: string;       // set this boolean var true when the resource reaches min
+}
+
 export interface Resource {
-  id: string;
+  id: string;             // stored in WorldState.vars[id] as a number
+  label?: string;         // for an optional player meter (debug shows it for free)
   min: number;
   max: number;
   start: number;
+  depletion?: ResourceDepletion;  // present => time-driven (recomputed); absent => choice-driven (stored)
+  atZero?: ResourceAtZero;        // fires once-effectively when value reaches min
+  hidden?: boolean;               // omit from the player meter (still in debug)
 }
 
 export interface VariableDef {

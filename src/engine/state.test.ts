@@ -29,4 +29,14 @@ describe('state', () => {
     expect(readVar(s, 'trust')).toBe(0);
     expect(readVar(s, 'missing')).toBeUndefined();
   });
+  it('seeds resource start values into vars', () => {
+    const story = {
+      id: 'g', title: 'g', startNodeId: 'n', startTime: '15:00', deadline: '16:00', startLocation: 'L',
+      variables: [], nodes: [], locations: [], events: [], endings: [],
+      resources: [{ id: 'lamp', min: 0, max: 4, start: 4 }, { id: 'cash', min: 0, max: 9, start: 2 }],
+    } as unknown as import('./types').Story;
+    const s = initState(story);
+    expect(s.vars.lamp).toBe(4);
+    expect(s.vars.cash).toBe(2);
+  });
 });

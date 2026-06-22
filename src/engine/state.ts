@@ -4,6 +4,7 @@ import { parseTime } from './time';
 export function initState(story: Story): WorldState {
   const vars: Record<string, Primitive> = {};
   for (const v of story.variables) vars[v.name] = v.default;
+  for (const r of story.resources ?? []) vars[r.id] = r.start;
   return {
     time: parseTime(story.startTime),
     location: story.startLocation,

@@ -302,3 +302,49 @@ describe('staticallyDeadChoice — is_true uses num()>0, not JS truthiness', () 
     expect(staticallyDeadChoice(useChoice, story, collectSymbols(story))).toBe(true);
   });
 });
+
+function resStory(over: Partial<Story> = {}): Story {
+  return {
+    id: 'g', title: 'g', startNodeId: 'a', startTime: '15:00', deadline: '16:00', startLocation: 'L',
+    variables: [{ name: 'dead', type: 'boolean', default: false, purpose: 'd' }],
+    locations: [],
+    events: [],
+    nodes: [{ id: 'a', title: 'A', body: 'a', resolvesEnding: true, choices: [] }],
+    endings: [
+      { id: 'ending_dark', name: 'Dark', summary: 's', conditions: [{ field: 'dead', op: 'is_true' }] },
+      { id: 'd', name: 'D', summary: 'd', conditions: [], isDefault: true },
+    ],
+    resources: [{ id: 'lamp', min: 0, max: 4, start: 4, depletion: { everyMinutes: 30, amount: 1 }, atZero: { ending: 'ending_dark', setFlag: 'dead' } }],
+    ...over,
+  } as unknown as Story;
+}
+
+describe('linter — resources', () => {
+  it('passes a well-formed resource story', () => {
+    const r = lintStory(resStory());
+    expect(r.errors.filter((e) => e.code.startsWith('RESOURCE'))).toEqual([]);
+  });
+  it('flags start out of range', () => {
+    const r = lintStory(resStory({ resources: [{ id: 'lamp', min: 0, max: 4, start: 9 }] as never }));
+    expect(r.errors.some((e) => e.code === 'RESOURCE_START_OUT_OF_RANGE')).toBe(true);
+  });
+  it('flags min >= max', () => {
+    const r = lintStory(resStory({ resources: [{ id: 'lamp', min: 4, max: 4, start: 4 }] as never }));
+    expect(r.errors.some((e) => e.code === 'RESOURCE_BAD_RANGE')).toBe(true);
+  });
+  it('flags an at-zero ending that does not exist', () => {
+    const r = lintStory(resStory({ resources: [{ id: 'lamp', min: 0, max: 4, start: 4, atZero: { ending: 'ghost' } }] as never }));
+    expect(r.errors.some((e) => e.code === 'RESOURCE_ATZERO_ENDING_MISSING')).toBe(true);
+  });
+  it('flags a time-driven resource targeted by an effect', () => {
+    const bad = resStory();
+    bad.nodes[0].choices = [{ id: 'x', label: 'x', destination: 'a', effects: [{ field: 'lamp', op: 'increment', value: '1' }] }];
+    expect(lintStory(bad).errors.some((e) => e.code === 'RESOURCE_TIME_DRIVEN_WRITTEN')).toBe(true);
+  });
+  it('warns on a set effect out of a variable bound', () => {
+    const s = resStory();
+    s.variables.push({ name: 'trust', type: 'number', default: 0, purpose: 't', min: 0, max: 4 } as never);
+    s.nodes[0].choices = [{ id: 'x', label: 'x', destination: 'a', effects: [{ field: 'trust', op: 'set', value: '9' }] }];
+    expect(lintStory(s).warnings.some((w) => w.code === 'VALUE_OUT_OF_BOUND')).toBe(true);
+  });
+});

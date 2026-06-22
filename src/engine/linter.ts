@@ -101,6 +101,8 @@ export function lintStory(story: Story): LintResult {
   const nodeIds = new Set(story.nodes.map((n) => n.id));
   const endingIds = new Set(story.endings.map((e) => e.id));
   const varNames = new Set(story.variables.map((v) => v.name));
+  // resource ids are valid effect/condition targets — add them so checkConds/checkEffs don't UNDEFINED_VAR them
+  for (const r of story.resources ?? []) varNames.add(r.id);
   const sym = collectSymbols(story);
 
   // duplicate node ids
@@ -286,5 +288,66 @@ export function lintStory(story: Story): LintResult {
     err('DEADLINE_UNWINNABLE', `Shortest reachable path (${minTime} min) already exceeds the deadline window (${window} min)`);
   }
 
+  for (const issue of lintResources(story)) {
+    if (issue.level === 'error') errors.push(issue);
+    else warnings.push(issue);
+  }
+
   return { ok: errors.length === 0, errors, warnings };
+}
+
+export function lintResources(story: Story): LintIssue[] {
+  const issues: LintIssue[] = [];
+  const resources = story.resources ?? [];
+  const varNames = new Set(story.variables.map((v) => v.name));
+  const endingIds = new Set(story.endings.map((e) => e.id));
+  const timeDriven = new Set(resources.filter((r) => r.depletion).map((r) => r.id));
+
+  for (const r of resources) {
+    if (r.min >= r.max) {
+      issues.push({ level: 'error', code: 'RESOURCE_BAD_RANGE', message: `Resource ${r.id}: min (${r.min}) must be < max (${r.max})`, where: r.id });
+    }
+    if (r.start < r.min || r.start > r.max) {
+      issues.push({ level: 'error', code: 'RESOURCE_START_OUT_OF_RANGE', message: `Resource ${r.id}: start ${r.start} is outside [${r.min}, ${r.max}]`, where: r.id });
+    }
+    if (r.depletion && (r.depletion.everyMinutes <= 0 || r.depletion.amount <= 0)) {
+      issues.push({ level: 'error', code: 'RESOURCE_BAD_DEPLETION', message: `Resource ${r.id}: depletion everyMinutes/amount must be > 0`, where: r.id });
+    }
+    if (varNames.has(r.id)) {
+      issues.push({ level: 'error', code: 'RESOURCE_ID_COLLISION', message: `Resource ${r.id} collides with a declared variable name`, where: r.id });
+    }
+    if (r.atZero?.ending && !endingIds.has(r.atZero.ending)) {
+      issues.push({ level: 'error', code: 'RESOURCE_ATZERO_ENDING_MISSING', message: `Resource ${r.id}: at-zero ending ${r.atZero.ending} does not exist`, where: r.id });
+    }
+    if (r.atZero?.setFlag && !varNames.has(r.atZero.setFlag)) {
+      issues.push({ level: 'error', code: 'RESOURCE_ATZERO_FLAG_UNDECLARED', message: `Resource ${r.id}: at-zero flag ${r.atZero.setFlag} is not a declared variable`, where: r.id });
+    }
+  }
+
+  // bounds map for the out-of-range warning (variables + resources)
+  const boundOf: Record<string, { min?: number; max?: number }> = {};
+  for (const v of story.variables) if (v.min !== undefined || v.max !== undefined) boundOf[v.name] = { min: v.min, max: v.max };
+  for (const r of resources) boundOf[r.id] = { min: r.min, max: r.max };
+
+  const scanEffects = (effects: { field: string; op: string; value?: string }[] | undefined, where: string) => {
+    for (const e of effects ?? []) {
+      if (timeDriven.has(e.field) && (e.op === 'set' || e.op === 'increment' || e.op === 'decrement')) {
+        issues.push({ level: 'error', code: 'RESOURCE_TIME_DRIVEN_WRITTEN', message: `Effect writes time-driven resource ${e.field} (it is recomputed from the clock)`, where });
+      }
+      if (e.op === 'set' && boundOf[e.field] && e.value !== undefined && /^-?\d+(\.\d+)?$/.test(e.value)) {
+        const n = Number(e.value);
+        const b = boundOf[e.field];
+        if ((b.min !== undefined && n < b.min) || (b.max !== undefined && n > b.max)) {
+          issues.push({ level: 'warning', code: 'VALUE_OUT_OF_BOUND', message: `set ${e.field}=${n} is outside its bound [${b.min ?? '-inf'}, ${b.max ?? 'inf'}] (will be clamped)`, where });
+        }
+      }
+    }
+  };
+  for (const n of story.nodes) {
+    scanEffects(n.entryEffects, n.id);
+    for (const c of n.choices ?? []) scanEffects(c.effects, `${n.id}:${c.id}`);
+  }
+  for (const ev of story.events) scanEffects(ev.ifAbsentEffects, ev.id);
+
+  return issues;
 }

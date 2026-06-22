@@ -87,3 +87,26 @@ describe('GameEngine', () => {
     expect(v.endingReached?.id).toBe('default');
   });
 });
+
+describe('GameEngine — clamping end-to-end', () => {
+  function clampStory(): Story {
+    return {
+      id: 'c', title: 'c', startNodeId: 'a', startTime: '15:00', deadline: '16:00', startLocation: 'L',
+      variables: [{ name: 'heat', type: 'number', default: 4, purpose: 'h', min: 0, max: 4 }],
+      locations: [], events: [],
+      nodes: [
+        { id: 'a', title: 'A', body: 'a', choices: [
+          { id: 'spike', label: 'spike', destination: 'b',
+            effects: [{ field: 'heat', op: 'increment', value: '10' }] },
+        ] },
+        { id: 'b', title: 'B', body: 'b', resolvesEnding: true, choices: [] },
+      ],
+      endings: [{ id: 'd', name: 'D', summary: 'd', conditions: [], isDefault: true }],
+    };
+  }
+  it('clamps a choice effect to the variable max', () => {
+    const g = new GameEngine(clampStory());
+    const v = g.choose('spike');
+    expect(v.state.vars.heat).toBe(4); // 4 + 10 clamped to max 4
+  });
+});

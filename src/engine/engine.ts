@@ -5,12 +5,14 @@ import { applyEffects } from './effects';
 import { checkScheduledEvents } from './scheduledEvents';
 import { resolveEnding } from './endingResolver';
 import { parseTime, formatTime } from './time';
+import { buildBounds, type BoundsMap } from './bounds';
 
 export class GameEngine {
   private story: Story;
   private state: WorldState;
   private currentId: string;
   private deadline: number;
+  private bounds: BoundsMap;
   private log: string[] = [];
   private ending?: Ending;
 
@@ -19,6 +21,7 @@ export class GameEngine {
     this.state = initState(story);
     this.currentId = story.startNodeId;
     this.deadline = parseTime(story.deadline);
+    this.bounds = buildBounds(story);
     this.enter(this.currentId);
   }
 
@@ -31,7 +34,7 @@ export class GameEngine {
   private enter(id: string): void {
     this.currentId = id;
     const n = this.node(id);
-    this.state = applyEffects(this.state, n.entryEffects);
+    this.state = applyEffects(this.state, n.entryEffects, this.bounds);
     if (!this.state.visited.includes(id)) {
       this.state = { ...this.state, visited: [...this.state.visited, id] };
     }
@@ -39,7 +42,7 @@ export class GameEngine {
     // (after entry effects) so any clock advance — choice OR entry effect — is seen exactly
     // once. checkScheduledEvents marks each fired event completed, so the recursive re-entry
     // a "present" event triggers cannot re-fire it.
-    const res = checkScheduledEvents(this.state, this.story);
+    const res = checkScheduledEvents(this.state, this.story, this.bounds);
     this.state = res.state;
     if (res.log.length) this.log.push(...res.log);
     if (res.routedNodeId && res.routedNodeId !== id) {
@@ -84,7 +87,7 @@ export class GameEngine {
     if (!evaluateConditions(choice.conditions, this.state)) {
       throw new Error(`Choice not available: ${choiceId}`);
     }
-    this.state = applyEffects(this.state, choice.effects);
+    this.state = applyEffects(this.state, choice.effects, this.bounds);
     this.enter(choice.destination);
     return this.view();
   }

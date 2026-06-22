@@ -1,4 +1,5 @@
 import type { Story, WorldState } from './types';
+import type { BoundsMap } from './bounds';
 import { evaluateConditions } from './conditions';
 import { applyEffects } from './effects';
 
@@ -8,7 +9,7 @@ export interface EventCheckResult {
   log: string[];
 }
 
-export function checkScheduledEvents(s: WorldState, story: Story): EventCheckResult {
+export function checkScheduledEvents(s: WorldState, story: Story, bounds?: BoundsMap): EventCheckResult {
   let state = s;
   let routedNodeId: string | undefined;
   const log: string[] = [];
@@ -22,7 +23,7 @@ export function checkScheduledEvents(s: WorldState, story: Story): EventCheckRes
       if (!routedNodeId) routedNodeId = ev.ifPresentNode;
       log.push(`Event ${ev.id} fired (present) -> ${ev.ifPresentNode}`);
     } else {
-      state = applyEffects(state, ev.ifAbsentEffects);
+      state = applyEffects(state, ev.ifAbsentEffects, bounds);
       state = { ...state, completedEvents: [...state.completedEvents, ev.id] };
       log.push(`Event ${ev.id} fired (absent); clue recoverable at ${ev.recoveryNodeId}`);
     }

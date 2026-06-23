@@ -97,7 +97,7 @@ import { exampleGame } from './exampleGame';
 
 describe('exampleGame', () => {
   it('has 3 chapters, a start chapter, and one game-ending chapter', () => {
-    expect(exampleGame.chapters.length).toBe(3);
+    expect(exampleGame.chapters.length).toBe(4);
     expect(exampleGame.chapters.some((c) => c.id === exampleGame.startChapterId)).toBe(true);
     expect(exampleGame.chapters.filter((c) => c.gameEnding).length).toBe(1);
   });
@@ -124,8 +124,8 @@ import type { Game } from './types';
 
 // Chapter 1: warmth starts at 4 and depletes 1 per 30 min. "slow" burns more warmth than "fast".
 const ch1Story: Story = {
-  id: 'ex_ch1', title: 'Descent', startNodeId: 'c1_start', startTime: '00:00', deadline: '03:00',
-  startLocation: 'L', variables: [], locations: [],
+  id: 'ex_ch1', title: 'Descent', startNodeId: 'c1_start', startTime: '00:00', deadline: '01:30',
+  startLocation: 'L', variables: [], locations: [{ id: 'L', name: 'Cave' }],
   events: [],
   resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 30, amount: 1 } }],
   nodes: [
@@ -140,7 +140,7 @@ const ch1Story: Story = {
 
 // Chapter 2a (warm route) and 2b (cold route) both reconverge on chapter 3.
 const ch2aStory: Story = {
-  id: 'ex_ch2a', title: 'The Dry Gallery', startNodeId: 'c2a_start', startTime: '00:00', deadline: '02:00',
+  id: 'ex_ch2a', title: 'The Dry Gallery', startNodeId: 'c2a_start', startTime: '00:00', deadline: '00:30',
   startLocation: 'L', variables: [], locations: [], events: [],
   resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 30, amount: 1 } }],
   nodes: [
@@ -153,7 +153,7 @@ const ch2aStory: Story = {
 };
 
 const ch2bStory: Story = {
-  id: 'ex_ch2b', title: 'The Wet Crawl', startNodeId: 'c2b_start', startTime: '00:00', deadline: '02:00',
+  id: 'ex_ch2b', title: 'The Wet Crawl', startNodeId: 'c2b_start', startTime: '00:00', deadline: '00:40',
   startLocation: 'L', variables: [], locations: [], events: [],
   resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 20, amount: 1 } }],
   nodes: [
@@ -167,9 +167,9 @@ const ch2bStory: Story = {
 
 // Chapter 3: game ending. "warmth gt 0" -> survived; default -> frozen.
 const ch3Story: Story = {
-  id: 'ex_ch3', title: 'The Last Climb', startNodeId: 'c3_start', startTime: '00:00', deadline: '02:00',
+  id: 'ex_ch3', title: 'The Last Climb', startNodeId: 'c3_start', startTime: '00:00', deadline: '00:20',
   startLocation: 'L', variables: [{ name: 'frozen_flag', type: 'boolean', default: false, purpose: 'reached zero warmth' }],
-  locations: [], events: [],
+  locations: [{ id: 'L', name: 'Cave' }], events: [],
   resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 30, amount: 1 }, atZero: { setFlag: 'frozen_flag' } }],
   nodes: [
     { id: 'c3_start', title: 'The Shaft', body: 'Daylight, far above.', choices: [
@@ -240,7 +240,7 @@ const contract: CarryContract = { vars: 'all', resources: ['warmth'], clues: tru
 const story = (): Story => ({
   id: 's', title: 's', startNodeId: 'start', startTime: '00:00', deadline: '02:00', startLocation: 'L',
   variables: [{ name: 'trust', type: 'number', default: 0, purpose: 't' }],
-  locations: [], events: [],
+  locations: [{ id: 'L', name: 'Cave' }], events: [],
   resources: [{ id: 'warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 30, amount: 1 } }],
   nodes: [{ id: 'start', title: 'S', body: 'b', entryEffects: [{ field: 'trust', op: 'increment', value: '1' }], choices: [] }],
   endings: [{ id: 'd', name: 'D', summary: 'd', conditions: [], isDefault: true }],

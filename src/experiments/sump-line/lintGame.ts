@@ -41,14 +41,16 @@ export function lintGame(game: Game): { ok: boolean; errors: LintIssue[]; warnin
     if (ch) for (const t of ch.transitions) if (ids.has(t.goTo)) stack.push(t.goTo);
   }
 
-  const reachableEnding = game.chapters.some((c) => reachable.has(c.id) && c.gameEnding);
-  if (!reachableEnding) {
-    errors.push({ level: 'error', code: 'GAME_NO_REACHABLE_ENDING', message: 'no game-ending chapter is reachable from the start chapter' });
-  }
+  if (ids.has(game.startChapterId)) {
+    const reachableEnding = game.chapters.some((c) => reachable.has(c.id) && c.gameEnding);
+    if (!reachableEnding) {
+      errors.push({ level: 'error', code: 'GAME_NO_REACHABLE_ENDING', message: 'no game-ending chapter is reachable from the start chapter' });
+    }
 
-  for (const ch of game.chapters) {
-    if (!reachable.has(ch.id)) {
-      warnings.push({ level: 'warning', code: 'GAME_ORPHAN_CHAPTER', message: `chapter ${ch.id} is unreachable from the start chapter`, where: ch.id });
+    for (const ch of game.chapters) {
+      if (!reachable.has(ch.id)) {
+        warnings.push({ level: 'warning', code: 'GAME_ORPHAN_CHAPTER', message: `chapter ${ch.id} is unreachable from the start chapter`, where: ch.id });
+      }
     }
   }
 

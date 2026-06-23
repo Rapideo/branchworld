@@ -26,6 +26,14 @@ describe('lintGame', () => {
     g.startChapterId = 'nope';
     expect(lintGame(g).errors.some((e) => e.code === 'GAME_NO_START')).toBe(true);
   });
+  it('missing start chapter does not cascade into GAME_NO_REACHABLE_ENDING or GAME_ORPHAN_CHAPTER', () => {
+    const g = clone(exampleGame);
+    g.startChapterId = 'nope';
+    const r = lintGame(g);
+    expect(r.errors.some((e) => e.code === 'GAME_NO_START')).toBe(true);
+    expect(r.errors.some((e) => e.code === 'GAME_NO_REACHABLE_ENDING')).toBe(false);
+    expect(r.warnings.some((w) => w.code === 'GAME_ORPHAN_CHAPTER')).toBe(false);
+  });
   it('flags when no game-ending chapter is reachable', () => {
     const g = clone(exampleGame);
     g.chapters[3].gameEnding = false;

@@ -141,7 +141,7 @@ const ch1Story: Story = {
 // Chapter 2a (warm route) and 2b (cold route) both reconverge on chapter 3.
 const ch2aStory: Story = {
   id: 'ex_ch2a', title: 'The Dry Gallery', startNodeId: 'c2a_start', startTime: '00:00', deadline: '00:30',
-  startLocation: 'L', variables: [], locations: [], events: [],
+  startLocation: 'L', variables: [], locations: [{ id: 'L', name: 'Cave' }], events: [],
   resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 30, amount: 1 } }],
   nodes: [
     { id: 'c2a_start', title: 'Dry Gallery', body: 'A dry passage, mercifully.', choices: [
@@ -154,7 +154,7 @@ const ch2aStory: Story = {
 
 const ch2bStory: Story = {
   id: 'ex_ch2b', title: 'The Wet Crawl', startNodeId: 'c2b_start', startTime: '00:00', deadline: '00:40',
-  startLocation: 'L', variables: [], locations: [], events: [],
+  startLocation: 'L', variables: [], locations: [{ id: 'L', name: 'Cave' }], events: [],
   resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 20, amount: 1 } }],
   nodes: [
     { id: 'c2b_start', title: 'Wet Crawl', body: 'Frigid water soaks you through.', choices: [

@@ -44,7 +44,7 @@ export const ch1Descent: Story = {
   ],
   resources: [
     // Carried survival meters (the container rebases `start` from the carried value on entry).
-    { id: 'lamp_charge', label: 'Lamp', min: 0, max: 100, start: 100, depletion: { everyMinutes: 12, amount: 5 }, atZero: { setFlag: 'cave_dark_out' } },
+    { id: 'lamp_charge', label: 'Lamp', min: 0, max: 100, start: 60, depletion: { everyMinutes: 12, amount: 5 }, atZero: { setFlag: 'cave_dark_out' } }, // start 60: a morning's use already spent (per the opening keystone)
     { id: 'body_heat', label: 'Warmth', min: 0, max: 100, start: 100, depletion: { everyMinutes: 20, amount: 5 }, atZero: { setFlag: 'cave_hypothermic' } },
     // Chapter-local, choice-driven (no depletion): how high the water has risen.
     { id: 'flood_water', label: 'Water', min: 0, max: 3, start: 0 },

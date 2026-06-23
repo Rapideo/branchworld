@@ -39,7 +39,7 @@ export const ch2Sump: Story = {
     { id: 'exit_rift', name: 'The Far Exit Rift' },
   ],
   resources: [
-    { id: 'lamp_charge', label: 'Lamp', min: 0, max: 100, start: 100, depletion: { everyMinutes: 12, amount: 5 }, atZero: { ending: 'end_dark_sump', setFlag: 'cave_dark_out' } },
+    { id: 'lamp_charge', label: 'Lamp', min: 0, max: 100, start: 60, depletion: { everyMinutes: 12, amount: 5 }, atZero: { ending: 'end_dark_sump', setFlag: 'cave_dark_out' } }, // standalone start 60; the container rebases to the carried value
     { id: 'body_heat', label: 'Warmth', min: 0, max: 100, start: 100, depletion: { everyMinutes: 15, amount: 5 } },
     { id: 'air_gulps', label: 'Air', min: 0, max: 3, start: 3 },
   ],

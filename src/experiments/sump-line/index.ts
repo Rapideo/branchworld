@@ -4,3 +4,7 @@ export * from './transitions';
 export * from './GameRunner';
 export * from './lintGame';
 export { exampleGame } from './exampleGame';
+export { sumpLine } from './content/sumpLine';
+export { ch1Descent } from './content/ch1Descent';
+export { ch2High } from './content/ch2High';
+export { ch2Sump } from './content/ch2Sump';

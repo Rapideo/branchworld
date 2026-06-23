@@ -39,7 +39,7 @@ export const ch2High: Story = {
     { id: 'daylight_shaft', name: 'The Daylight Shaft' },
   ],
   resources: [
-    { id: 'lamp_charge', label: 'Lamp', min: 0, max: 100, start: 100, depletion: { everyMinutes: 12, amount: 5 }, atZero: { ending: 'end_dark_high', setFlag: 'cave_dark_out' } },
+    { id: 'lamp_charge', label: 'Lamp', min: 0, max: 100, start: 60, depletion: { everyMinutes: 12, amount: 5 }, atZero: { ending: 'end_dark_high', setFlag: 'cave_dark_out' } }, // standalone start 60; the container rebases to the carried value
     { id: 'body_heat', label: 'Warmth', min: 0, max: 100, start: 100, depletion: { everyMinutes: 20, amount: 5 }, atZero: { setFlag: 'cave_hypothermic' } },
     { id: 'rope_pitches', label: 'Rope', min: 0, max: 2, start: 2 },
   ],

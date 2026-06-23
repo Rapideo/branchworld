@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BranchWorld — The Story Editor (Design Overview)</title>
+<style>
+  :root{
+    --bg:#fafaf9; --ink:#1c1917; --ink2:#292524; --muted:#78716c; --faint:#a8a29e;
+    --line:#e7e5e4; --card:#ffffff; --accent:#4f46e5; --accent-soft:#eef2ff;
+    --green:#10b981; --green-soft:#ecfdf5; --red:#ef4444; --amber:#f59e0b; --amber-soft:#fffbeb;
+    --shadow:0 1px 2px rgba(0,0,0,.05), 0 8px 24px rgba(28,25,23,.06);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1040px; margin:0 auto; padding:0 22px}
+  h1,h2,h3{line-height:1.2; letter-spacing:-.01em}
+  h2{font-size:1.55rem; margin:0 0 .3em}
+  h3{font-size:1.05rem; margin:0 0 .35em}
+  p{margin:.5em 0}
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .tag{display:inline-block; font-size:.72rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+       color:var(--accent); background:var(--accent-soft); padding:4px 10px; border-radius:999px}
+  /* hero */
+  header.hero{padding:64px 0 30px; text-align:center}
+  header.hero h1{font-size:2.5rem; margin:.35em 0 .15em}
+  header.hero .sub{font-size:1.15rem; color:var(--muted); max-width:680px; margin:.4em auto 0}
+  .note{display:inline-block; margin-top:18px; font-size:.85rem; color:var(--muted);
+        background:#fff; border:1px solid var(--line); border-radius:999px; padding:7px 16px; box-shadow:var(--shadow)}
+  /* sections */
+  section{padding:34px 0}
+  section.alt{background:#fff; border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+  .lead{font-size:1.08rem; color:var(--ink2); max-width:760px}
+  .muted{color:var(--muted)}
+  .grid{display:grid; gap:16px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:760px){.g2,.g3{grid-template-columns:1fr}}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow)}
+  .card h3{display:flex; align-items:center; gap:9px}
+  .ico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:16px;flex:none}
+  .ico.indigo{background:var(--accent-soft); color:var(--accent)}
+  .ico.green{background:var(--green-soft); color:var(--green)}
+  .ico.amber{background:var(--amber-soft); color:var(--amber)}
+  .ico.stone{background:#f5f5f4; color:var(--ink2)}
+  /* ============ EDITOR MOCKUP ============ */
+  .mock{background:#fff; border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:var(--shadow)}
+  .mock-bar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; border-bottom:1px solid var(--line); background:#fcfcfb}
+  .pick{display:flex; align-items:center; gap:7px; font-size:.85rem; color:var(--muted)}
+  .pick .sel{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:5px 10px; background:#fff; color:var(--ink); font-weight:600}
+  .badge-draft{font-size:.68rem; color:var(--accent); background:var(--accent-soft); padding:2px 7px; border-radius:999px; font-weight:700}
+  .switch{margin-left:auto; display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+  .switch button{border:0; background:#fff; padding:6px 14px; font-size:.85rem; font-weight:600; color:var(--muted); cursor:default}
+  .switch button.on{background:var(--ink2); color:#fff}
+  .toolbar{display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:8px 14px; border-bottom:1px solid var(--line); font-size:.82rem; background:#fff}
+  .tbtn{border:1px solid var(--line); background:#fff; border-radius:8px; padding:5px 11px; color:var(--ink2); font-weight:600; cursor:default}
+  .tbtn.ghost{border-style:dashed; color:var(--muted)}
+  .tbtn.right{margin-left:auto}
+  .lintbar{display:flex; align-items:center; gap:8px; padding:7px 14px; font-size:.8rem; background:var(--amber-soft); color:#92400e; border-bottom:1px solid var(--line)}
+  .lintbar.clean{background:var(--green-soft); color:#065f46}
+  .editor{display:grid; grid-template-columns:1.35fr 1fr; min-height:430px}
+  @media(max-width:820px){.editor{grid-template-columns:1fr}}
+  .canvas{position:relative; background:
+      radial-gradient(circle at 1px 1px, #e7e5e4 1px, transparent 0) 0 0/22px 22px,
+      #fbfbfa; border-right:1px solid var(--line); padding:10px}
+  @media(max-width:820px){.canvas{border-right:0; border-bottom:1px solid var(--line); min-height:360px}}
+  .addscene{position:absolute; top:12px; right:12px; z-index:3; font-size:.75rem; font-weight:600; color:var(--accent);
+            background:#fff; border:1px dashed #c7d2fe; border-radius:8px; padding:5px 10px; cursor:default}
+  .hint{position:absolute; bottom:10px; left:12px; font-size:.72rem; color:var(--faint); z-index:3}
+  svg.graph{width:100%; height:100%; display:block; min-height:410px}
+  .node{cursor:pointer}
+  .node rect{fill:#fff; stroke:#d6d3d1; stroke-width:1.5; transition:stroke .15s, filter .15s}
+  .node:hover rect{stroke:#a8a29e}
+  .node.sel rect{stroke:var(--accent); stroke-width:2.5; filter:drop-shadow(0 4px 10px rgba(79,70,229,.18))}
+  .node.start rect{stroke:var(--green)}
+  .node.err rect{stroke:var(--red); stroke-width:2.5}
+  .node .t{font:600 12px sans-serif; fill:var(--ink2)}
+  .node .ty{font:10px sans-serif; fill:var(--faint)}
+  .ev rect{fill:#eef2ff; stroke:#c7d2fe}
+  .ev .t{fill:var(--accent)}
+  .endp rect{fill:#f5f5f4; stroke:#d6d3d1}
+  .endp .t{fill:var(--ink2)}
+  .res rect{fill:var(--ink2)}
+  .res .t{fill:#fff}
+  .edge{stroke:#cbd5e1; stroke-width:1.6; fill:none}
+  .edge.dash{stroke-dasharray:4 4; stroke:#c7d2fe}
+  .edgelabel{font:9px sans-serif; fill:var(--muted)}
+  /* inspector */
+  .insp{padding:16px 18px; font-size:.85rem}
+  .insp .head{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px}
+  .insp .head b{font-size:1rem}
+  .insp .editing{font-size:.66rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); background:var(--accent-soft); padding:3px 8px; border-radius:999px}
+  .field{margin:11px 0}
+  .field label{display:block; font-size:.72rem; font-weight:600; color:var(--muted); margin-bottom:3px; text-transform:uppercase; letter-spacing:.03em}
+  .inp{width:100%; border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; font-size:.85rem; color:var(--ink); background:#fff}
+  textarea.inp{resize:none; min-height:54px; line-height:1.5}
+  .selrow{display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line); border-radius:8px; padding:5px 9px; background:#fff; font-size:.82rem}
+  .choices .ch{border:1px solid var(--line); border-radius:10px; padding:9px 10px; margin-bottom:8px; background:#fcfcfb}
+  .ch .lab{font-weight:600; font-size:.85rem}
+  .ch .meta{font-size:.74rem; color:var(--muted); margin-top:3px; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center}
+  .pill{display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line); border-radius:7px; padding:2px 7px; background:#fff; font-size:.72rem; color:var(--ink2)}
+  .pill.cond{background:var(--amber-soft); border-color:#fde68a; color:#92400e}
+  .pill.eff{background:#f5f5f4}
+  .arrow{color:var(--faint)}
+  .addch{font-size:.76rem; color:var(--accent); border:1px dashed #c7d2fe; border-radius:8px; padding:5px 9px; display:inline-block; cursor:default}
+  /* callouts */
+  .callouts{margin-top:14px}
+  .co{display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-top:1px dashed var(--line)}
+  .co:first-child{border-top:0}
+  .num{flex:none; width:26px; height:26px; border-radius:50%; background:var(--ink2); color:#fff; font-size:.8rem; font-weight:700; display:grid; place-items:center; margin-top:1px}
+  .co b{font-size:.95rem}
+  .co p{margin:.1em 0 0; font-size:.92rem; color:var(--muted)}
+  /* steps */
+  ol.steps{counter-reset:s; list-style:none; padding:0; margin:0; display:grid; gap:12px}
+  ol.steps li{counter-increment:s; background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px 14px 56px; position:relative; box-shadow:var(--shadow)}
+  ol.steps li::before{content:counter(s); position:absolute; left:14px; top:14px; width:28px; height:28px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:700; display:grid; place-items:center}
+  ol.steps b{display:block}
+  /* chips for entities */
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .chip{display:inline-flex; align-items:center; gap:7px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:.88rem; font-weight:600; box-shadow:var(--shadow)}
+  .chip small{font-weight:400; color:var(--muted)}
+  /* scope columns */
+  .scope{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:760px){.scope{grid-template-columns:1fr}}
+  .scope ul{margin:.4em 0 0; padding-left:1.1em}
+  .scope li{margin:.3em 0}
+  .ok::marker{content:"✓  "}
+  .later::marker{content:"→  "}
+  .scope .ok li::marker{color:var(--green)}
+  .scope .later li::marker{color:var(--accent)}
+  footer{padding:40px 0 60px; text-align:center; color:var(--muted); font-size:.9rem}
+  .cta{display:inline-block; margin-top:6px; background:var(--ink2); color:#fff; padding:11px 22px; border-radius:11px; font-weight:600; box-shadow:var(--shadow)}
+  .cta:hover{text-decoration:none; background:#1c1917}
+  .kbd{font:600 .85em ui-monospace,SFMono-Regular,Menlo,monospace; background:#f5f5f4; border:1px solid var(--line); border-radius:6px; padding:1px 6px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="tag">Design Overview · Story Editor</span>
+    <h1>BranchWorld — The Story Editor</h1>
+    <p class="sub">How a writer will build a complete, reactive, branching story — visually, with no code. This is the tool we're about to build, shown here as a design preview.</p>
+    <div class="note">📐 This is a mock-up of the planned editor — the interactive demo below illustrates how it will work, not the finished product.</div>
+  </div>
+</header>
+
+<section class="alt">
+  <div class="wrap">
+    <span class="tag">The big idea</span>
+    <h2>You edit the story <em>on</em> the story</h2>
+    <p class="lead">BranchWorld already has a hardened engine and a visual map of any story. The Story Editor turns that map into a workshop: <b>click a scene on the graph to edit it</b> — its text, its choices, the conditions and effects — right where you can see how it connects to everything else. The global pieces (variables, timed events, endings, the deadline) live in a settings drawer. A built-in checker (the "linter") watches as you type and <b>draws any problems straight onto the map</b>, so you always know exactly what's broken and where — without it ever stopping you mid-thought.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">Try it — click a scene</span>
+    <h2>The editor at a glance</h2>
+    <p class="lead muted">This is an interactive sketch of the editor screen. Click any scene box on the left and watch it open in the editing panel on the right — that's the core of how the whole tool works.</p>
+
+    <div class="mock" style="margin-top:18px">
+      <!-- top bar -->
+      <div class="mock-bar">
+        <span class="pick">Story
+          <span class="sel">The Prater Line <span class="badge-draft">draft</span> ▾</span>
+        </span>
+        <span class="switch">
+          <button>Play</button><button>Graph</button><button class="on">Edit</button>
+        </span>
+      </div>
+      <div class="toolbar">
+        <span class="tbtn">＋ New</span>
+        <span class="tbtn">⧉ Duplicate</span>
+        <span class="tbtn ghost">⬇ Import</span>
+        <span class="tbtn ghost">⬆ Export</span>
+        <span class="tbtn right">⚙ Story Settings</span>
+      </div>
+      <div class="lintbar" id="lintbar"><span>⚠</span><span id="lintmsg">0 errors · 1 warning — one scene is unreachable (highlighted in red)</span></div>
+
+      <!-- editor body -->
+      <div class="editor">
+        <!-- graph canvas -->
+        <div class="canvas">
+          <span class="addscene">＋ Add scene</span>
+          <span class="hint">↳ click a scene to edit it · pan / zoom / fit</span>
+          <svg class="graph" viewBox="0 0 520 430" preserveAspectRatio="xMidYMid meet" aria-label="Story flow graph">
+            <defs>
+              <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#cbd5e1"/>
+              </marker>
+              <marker id="ahd" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#c7d2fe"/>
+              </marker>
+            </defs>
+            <!-- edges -->
+            <path class="edge" d="M90,70 L90,108" marker-end="url(#ah)"/>
+            <path class="edge" d="M90,150 L90,188" marker-end="url(#ah)"/>
+            <path class="edge" d="M120,210 C 200,210 210,250 250,278" marker-end="url(#ah)"/>
+            <path class="edge" d="M90,230 L90,300" marker-end="url(#ah)"/>
+            <text class="edgelabel" x="150" y="240">if mara_trust ≥ 2</text>
+            <!-- event edges -->
+            <path class="edge dash" d="M300,150 C 260,200 230,230 130,300" marker-end="url(#ahd)"/>
+            <text class="edgelabel" x="250" y="200">present @23:30</text>
+            <path class="edge dash" d="M340,150 L340,300" marker-end="url(#ahd)"/>
+            <text class="edgelabel" x="345" y="230">recovery</text>
+            <!-- resolver edges -->
+            <path class="edge dash" d="M120,330 L300,360" marker-end="url(#ahd)"/>
+            <path class="edge dash" d="M360,360 L420,330"/>
+            <path class="edge dash" d="M360,365 L420,372"/>
+
+            <!-- nodes (clickable) -->
+            <g class="node start sel" data-id="safehouse" transform="translate(40,34)">
+              <rect width="100" height="36" rx="8"/>
+              <text class="t" x="12" y="18">Safehouse</text><text class="ty" x="12" y="30">scene · start</text>
+            </g>
+            <g class="node" data-id="sperl" transform="translate(40,114)">
+              <rect width="100" height="36" rx="8"/>
+              <text class="t" x="12" y="18">Café Sperl</text><text class="ty" x="12" y="30">conversation</text>
+            </g>
+            <g class="node" data-id="stakeout" transform="translate(40,194)">
+              <rect width="100" height="36" rx="8"/>
+              <text class="t" x="12" y="18">The Stakeout</text><text class="ty" x="12" y="30">scene</text>
+            </g>
+            <g class="node" data-id="witness" transform="translate(80,304)">
+              <rect width="100" height="36" rx="8"/>
+              <text class="t" x="12" y="18">The Pickup</text><text class="ty" x="12" y="30">event scene</text>
+            </g>
+            <!-- an unreachable scene flagged red -->
+            <g class="node err" data-id="arcade" transform="translate(360,40)">
+              <rect width="120" height="36" rx="8"/>
+              <text class="t" x="12" y="18">⚠ Side Alley</text><text class="ty" x="12" y="30">unreachable</text>
+            </g>
+            <!-- scheduled event badge -->
+            <g class="node ev" data-id="event" transform="translate(290,114)">
+              <rect width="120" height="36" rx="8"/>
+              <text class="t" x="12" y="16">⏱ Canal Handoff</text><text class="ty" x="12" y="30">fires 23:30</text>
+            </g>
+            <!-- resolver hub -->
+            <g class="node res" data-id="resolver" transform="translate(290,344)">
+              <rect width="110" height="34" rx="8"/>
+              <text class="t" x="12" y="21">Ending Resolver</text>
+            </g>
+            <!-- endings -->
+            <g class="node endp" data-id="end1" transform="translate(420,314)">
+              <rect width="92" height="28" rx="14"/>
+              <text class="t" x="11" y="18">The Witness</text>
+            </g>
+            <g class="node endp" data-id="end2" transform="translate(420,356)">
+              <rect width="92" height="28" rx="14"/>
+              <text class="t" x="11" y="18">In the Dark</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- inspector -->
+        <div class="insp" id="insp">
+          <!-- filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <div class="callouts">
+      <div class="co"><span class="num">1</span><div><b>The map (left)</b><p>Your whole story, laid out automatically — scenes, the choices between them, the timed event, and the endings. Click any box to edit it.</p></div></div>
+      <div class="co"><span class="num">2</span><div><b>The editing panel (right)</b><p>The selected scene opens here as a simple form: its title and text, and each choice with its destination, conditions, and effects — all chosen from menus, no code.</p></div></div>
+      <div class="co"><span class="num">3</span><div><b>The toolbar</b><p>Start a <b>New</b> story, <b>Duplicate</b> an existing one to tinker with, or <b>Import / Export</b> a story file to share it.</p></div></div>
+      <div class="co"><span class="num">4</span><div><b>The live checker</b><p>The bar across the top and the red/amber rings on the map update as you type — here it's telling you one scene can't be reached. It informs; it never blocks you.</p></div></div>
+      <div class="co"><span class="num">5</span><div><b>Story Settings</b><p>The pieces that aren't single scenes — your variables, the timed events, the endings, the deadline — live in a drawer behind this button.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <span class="tag">The core loop</span>
+    <h2>Editing a scene, step by step</h2>
+    <ol class="steps">
+      <li><b>Click the scene on the map.</b> It highlights, and its details open in the panel on the right — you're always editing in context, seeing how this beat connects to the rest.</li>
+      <li><b>Write the scene.</b> Type the title and the prose. Need to mention the time? Drop in the <span class="kbd">{{time}}</span> token and the engine fills in the real clock — so the story can never lie about the time.</li>
+      <li><b>Wire the choices.</b> For each choice, pick where it leads from a menu of your scenes, and (optionally) add a condition ("only if trust ≥ 2") or an effect ("trust +1", "advance 10 minutes") — again, all from menus.</li>
+      <li><b>Watch the checker.</b> The map and the top bar update instantly. A red ring means a real problem (an unreachable scene, a missing ending); fix it when you're ready. Nothing is ever lost — your draft auto-saves as you go.</li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">One story, three faces</span>
+    <h2>Play · Graph · Edit</h2>
+    <p class="lead muted">The same story powers all three views, because they all run on the one shared engine — what you edit is exactly what you play.</p>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card"><h3><span class="ico green">▶</span>Play</h3><p>Step through the story as a player would — the clock ticking, choices appearing and disappearing, the ending earned from everything you did.</p></div>
+      <div class="card"><h3><span class="ico indigo">▦</span>Graph</h3><p>See the whole story as a map, with the checker's findings drawn right on it. Great for understanding structure at a glance.</p></div>
+      <div class="card"><h3><span class="ico stone">✎</span>Edit</h3><p>The same map, now editable. Click to change scenes, add choices, and tune the globals — with the checker guiding you live.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <span class="tag">What you can build</span>
+    <h2>Everything a complete chapter needs</h2>
+    <p class="lead muted">From the editing panel and the Story Settings drawer, a writer can author a full, playable, checker-clean chapter end to end:</p>
+    <div class="chips" style="margin-top:14px">
+      <span class="chip">🎬 Scenes <small>title · prose · type</small></span>
+      <span class="chip">↳ Choices <small>where each one leads</small></span>
+      <span class="chip">🔒 Conditions <small>"only if trust ≥ 2"</small></span>
+      <span class="chip">⚡ Effects <small>"trust +1", "+10 min"</small></span>
+      <span class="chip">🔢 Variables <small>trust, knowledge, flags</small></span>
+      <span class="chip">⏱ Timed events <small>fire on the clock</small></span>
+      <span class="chip">🏁 Endings <small>resolved from state</small></span>
+      <span class="chip">⚙ Settings <small>start, deadline, clock</small></span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">Saving & sharing</span>
+    <h2>Drafts that look after themselves</h2>
+    <div class="grid g2" style="margin-top:6px">
+      <div class="card"><h3><span class="ico indigo">💾</span>Auto-saving drafts</h3><p>Your work saves continuously as you type, right in the browser, and your drafts show up in the story menu next to the built-in examples — ready to Play, Graph, or keep editing.</p></div>
+      <div class="card"><h3><span class="ico stone">↔</span>New · Duplicate · Import · Export</h3><p>Start fresh, copy an example like <em>The Prater Line</em> to take it apart, bring in a story file someone sent you, or export yours to share. The built-in examples stay read-only — duplicate one to make it yours.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <span class="tag">A safety net, not a straitjacket</span>
+    <h2>The checker informs — it never blocks</h2>
+    <p class="lead">While you're building, you're <em>constantly</em> half-finished — a new scene with no exit yet, a choice that doesn't lead anywhere <em>yet</em>. So the editor never stops you mid-edit. It shows every problem live, on the map and in the top bar, and lets you save and export in any state. The hard line — "this story is too broken to ship" — is only drawn when it actually matters, the same way a spell-checker underlines a typo without locking your keyboard.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">Honest scope</span>
+    <h2>This first version — and what's next</h2>
+    <div class="scope" style="margin-top:8px">
+      <div class="card">
+        <h3><span class="ico green">✓</span>In this first cut</h3>
+        <ul class="ok">
+          <li>Edit scenes, choices, conditions &amp; effects on the graph</li>
+          <li>Add and delete scenes</li>
+          <li>Variables, timed events, endings &amp; story settings</li>
+          <li>Auto-saving drafts · New / Duplicate / Import / Export</li>
+          <li>Live checking drawn on the map</li>
+          <li>One story, three views — Play, Graph, Edit</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico indigo">→</span>Coming soon after</h3>
+        <ul class="later">
+          <li>A locations editor (travel times, descriptions, map connections)</li>
+          <li>Renaming a scene's id with automatic re-linking</li>
+          <li>Drawing choices by dragging on the canvas</li>
+          <li><b>AI-assist</b> — drafting prose, spotting issues, and proposing clock tuning (the AI proposes; the checker verifies)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>Want to feel the engine the editor is built on? The player and the read-only graph are live today:</p>
+    <a class="cta" href="https://branchworld-player.netlify.app">▶ Open the live player &amp; graph</a>
+    <p style="margin-top:22px; font-size:.82rem; color:var(--faint)">BranchWorld — Story Editor design overview · a preview of work in progress</p>
+  </div>
+</footer>
+
+<script>
+  var SCENES = {
+    safehouse: {
+      title:"The Margareten Safehouse", type:"scene · start node",
+      body:"Rain ticks against the dormer window like a code you can't read. Lindqvist nudges the satchel across the table. “It's clean,” he says. “{{time}}. A long time to do a simple thing.”",
+      choices:[
+        {lab:"Trust the old man, take the satchel", to:"Across the Wet City", eff:"lindqvist_trust +1"},
+        {lab:"Press him about the canal", to:"What the Old Man Won't Say", cond:"lindqvist_trust ≤ 1"},
+        {lab:"Search the satchel he gave you", to:"Under the False Bottom", cond:"lindqvist_trust < 2"}
+      ]
+    },
+    sperl: {
+      title:"Café Sperl, the Back Booth", type:"conversation",
+      body:"The coffeehouse is a cave of old velvet and marble. Irina Dragomir sits with both hands wrapped around a cup that went cold an hour ago. “You're late,” she says, not looking up.",
+      choices:[
+        {lab:"Tell her the plain truth", to:"The Crack in the Cup", eff:"dragomir_trust +2"},
+        {lab:"Reassure her with the cover story", to:"She Has Heard This Speech", eff:"dragomir_trust −1"},
+        {lab:"Press for the microfilm now", to:"The Wrong Thing to Want First", eff:"dragomir_trust −2"}
+      ]
+    },
+    stakeout: {
+      title:"The Stakeout", type:"scene",
+      body:"You nurse a coffee and watch the back booth. The minutes cost you — {{time}}, and the canal's appointment is coming whether you're there or not.",
+      choices:[
+        {lab:"Keep watching", to:"Empty Booth", eff:"+20 min"},
+        {lab:"Give up and step out", to:"The Sidewalk", eff:"+5 min"}
+      ]
+    },
+    witness: {
+      title:"The Pickup", type:"event scene · resolves ending",
+      body:"A man in a gray coat lifts the folded newspaper and is gone. The receiver steps into the lamplight — and you know the face. It is Lindqvist's own runner.",
+      choices:[
+        {lab:"Go and find Volkov", to:"The Aspern Bridge Underpass", eff:"volkov_suspicion +2"},
+        {lab:"Take the truth to the train", to:"Westbahnhof, Platform 3"}
+      ]
+    },
+    arcade: {
+      title:"Side Alley", type:"scene · ⚠ unreachable",
+      body:"(No choice anywhere leads here yet — the checker has flagged this scene in red. Add a choice that points to it, or delete it.)",
+      choices:[]
+    },
+    event: {
+      title:"Canal Handoff", type:"scheduled event",
+      body:"A timed world event. Fires when the clock reaches 23:30, whether or not the player is at the canal. If present → witness it; if absent → the world changes anyway and leaves a clue.",
+      choices:[],
+      isEvent:true
+    },
+    resolver: {
+      title:"Ending Resolver", type:"how endings are chosen",
+      body:"At the resolution point, the engine picks the first ending whose conditions match the player's accumulated state. A mandatory default catches everything else — so no playthrough is ever left without an ending.",
+      choices:[]
+    },
+    end1: {
+      title:"The Witness", type:"ending",
+      body:"Conditions: saw_pickup is true. Earned by witnessing the handoff.",
+      choices:[], isEnding:true
+    },
+    end2: {
+      title:"In the Dark", type:"ending · default",
+      body:"The mandatory catch-all. Whatever else happened, the night resolves here when no other ending matches.",
+      choices:[], isEnding:true
+    }
+  };
+
+  function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+  function render(id){
+    var s = SCENES[id]; if(!s) return;
+    var h = '';
+    h += '<div class="head"><b>'+esc(s.title)+'</b><span class="editing">Editing</span></div>';
+    h += '<div class="muted" style="font-size:.74rem;margin-bottom:6px">'+esc(s.type)+'</div>';
+    if(s.isEvent || s.isEnding || s.choices.length===0 && (id==="resolver")){
+      h += '<div class="field"><label>Details</label><div class="inp" style="min-height:auto;background:#fcfcfb">'+esc(s.body)+'</div></div>';
+      h += '<p class="muted" style="font-size:.8rem">'+(s.isEvent?'Edited in the ⚙ Story Settings drawer (Events).':s.isEnding?'Edited in the ⚙ Story Settings drawer (Endings).':'')+'</p>';
+      document.getElementById('insp').innerHTML = h; return;
+    }
+    h += '<div class="field"><label>Title</label><input class="inp" value="'+esc(s.title)+'" readonly></div>';
+    h += '<div class="field"><label>Scene text</label><textarea class="inp" readonly>'+esc(s.body)+'</textarea></div>';
+    h += '<div class="field"><label>Choices</label><div class="choices">';
+    if(s.choices.length===0){ h += '<p class="muted" style="font-size:.82rem">No choices — this scene ends the story.</p>'; }
+    s.choices.forEach(function(c){
+      h += '<div class="ch"><div class="lab">'+esc(c.lab)+'</div><div class="meta">';
+      h += '<span class="arrow">leads to</span> <span class="pill">'+esc(c.to)+' ▾</span>';
+      if(c.cond) h += '<span class="pill cond">if '+esc(c.cond)+'</span>';
+      if(c.eff)  h += '<span class="pill eff">does '+esc(c.eff)+'</span>';
+      h += '</div></div>';
+    });
+    h += '<span class="addch">＋ Add choice</span>';
+    h += '</div></div>';
+    document.getElementById('insp').innerHTML = h;
+  }
+
+  document.querySelectorAll('.node').forEach(function(n){
+    n.addEventListener('click', function(){
+      document.querySelectorAll('.node.sel').forEach(function(x){x.classList.remove('sel');});
+      n.classList.add('sel');
+      render(n.getAttribute('data-id'));
+    });
+  });
+  render('safehouse');
+</script>
+</body>
+</html>

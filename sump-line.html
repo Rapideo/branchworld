@@ -1,0 +1,1206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sump Line</title>
+<style>
+  :root { --bg:#08080a; --ink:#d2ccc0; --dim:#8b8478; --lamp:#e8b057; --cold:#6f9fb0; --line:#211f1c; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:var(--bg); }
+  body {
+    color:var(--ink);
+    font:18px/1.7 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    background-image: radial-gradient(900px 500px at 50% -8%, rgba(232,176,87,.07), transparent 62%);
+    min-height:100vh;
+  }
+  main { max-width:640px; margin:0 auto; padding:34px 22px 90px; }
+  .status { display:flex; justify-content:space-between; align-items:baseline;
+    border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:14px;
+    font-size:12px; letter-spacing:.18em; text-transform:uppercase; }
+  .status .chapter { color:var(--dim); }
+  .status .clock { color:var(--lamp); }
+  .meters { display:flex; gap:18px; margin-bottom:26px; }
+  .meter { flex:1; display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); }
+  .meter-track { flex:1; height:5px; background:#16140f; border-radius:3px; overflow:hidden; }
+  .meter-fill { display:block; height:100%; background:var(--lamp); transition:width .35s ease; }
+  .meter:nth-child(2) .meter-fill { background:var(--cold); }
+  .meter.low .meter-fill { background:#c9543f; }
+  .node-title { font-weight:600; font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); margin:0 0 12px; }
+  .prose p { margin:0 0 1.05em; }
+  .prose p:last-child { margin-bottom:0; }
+  .choices { display:flex; flex-direction:column; gap:11px; margin-top:30px; }
+  .choice {
+    text-align:left; background:#100e0b; color:var(--ink); border:1px solid var(--line);
+    border-radius:10px; padding:14px 16px; font:inherit; font-size:16px; cursor:pointer; transition:.14s;
+  }
+  .choice:hover { border-color:var(--lamp); background:#15120c; transform:translateX(2px); }
+  .ending { text-align:center; padding-top:24px; }
+  .ending-kicker { color:var(--dim); font-size:12px; letter-spacing:.3em; text-transform:uppercase; margin-bottom:14px; }
+  .ending-name { font-weight:600; font-size:30px; line-height:1.15; margin:0 0 26px; color:var(--lamp); }
+  .ending .prose { text-align:left; }
+  .restart { margin-top:34px; background:transparent; color:var(--dim); border:1px solid var(--line);
+    border-radius:10px; padding:11px 18px; font:inherit; font-size:14px; cursor:pointer; }
+  .restart:hover { color:var(--ink); border-color:var(--lamp); }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>"use strict";
+(() => {
+  // src/engine/time.ts
+  function parseTime(hhmm) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+    if (!m) throw new Error(`Invalid time: ${hhmm}`);
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+  function addMinutes(minutes, delta) {
+    return minutes + delta;
+  }
+  function formatTime(minutes) {
+    const dayOffset = Math.floor(minutes / 1440);
+    const norm = (minutes % 1440 + 1440) % 1440;
+    const h = Math.floor(norm / 60);
+    const mm = norm % 60;
+    const ap = h < 12 ? "AM" : "PM";
+    let h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    const suffix = dayOffset > 0 ? ` (+${dayOffset}d)` : "";
+    return `${h12}:${mm < 10 ? "0" : ""}${mm} ${ap}${suffix}`;
+  }
+
+  // src/engine/state.ts
+  function initState(story) {
+    var _a;
+    const vars = {};
+    for (const v of story.variables) vars[v.name] = v.default;
+    for (const r of (_a = story.resources) != null ? _a : []) vars[r.id] = r.start;
+    return {
+      time: parseTime(story.startTime),
+      location: story.startLocation,
+      clues: [],
+      inventory: [],
+      visited: [],
+      completedEvents: [],
+      vars
+    };
+  }
+  function readVar(s, field) {
+    if (field === "time") return s.time;
+    if (field === "location") return s.location;
+    return s.vars[field];
+  }
+
+  // src/engine/bounds.ts
+  function clampValue(n, b) {
+    if (!b) return n;
+    let v = n;
+    if (b.min !== void 0) v = Math.max(b.min, v);
+    if (b.max !== void 0) v = Math.min(b.max, v);
+    return v;
+  }
+  function buildBounds(story) {
+    var _a;
+    const m = {};
+    for (const v of story.variables) {
+      if (v.min !== void 0 || v.max !== void 0) m[v.name] = { min: v.min, max: v.max };
+    }
+    for (const r of (_a = story.resources) != null ? _a : []) {
+      m[r.id] = { min: r.min, max: r.max };
+    }
+    return m;
+  }
+
+  // src/engine/conditions.ts
+  function num(v) {
+    if (typeof v === "number") return v;
+    if (typeof v === "boolean") return v ? 1 : 0;
+    if (v == null) return 0;
+    const n = Number(v);
+    return Number.isNaN(n) ? 0 : n;
+  }
+  function coerce(v) {
+    if (v === "true") return true;
+    if (v === "false") return false;
+    if (v != null && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+    return v != null ? v : "";
+  }
+  function evaluateCondition(c, s) {
+    var _a, _b, _c, _d, _e, _f, _g;
+    const cur = readVar(s, c.field);
+    switch (c.op) {
+      case "equals":
+        return String(cur) === String(coerce(c.value));
+      case "not_equals":
+        return String(cur) !== String(coerce(c.value));
+      case "gt":
+        return num(cur) > num(coerce(c.value));
+      case "gte":
+        return num(cur) >= num(coerce(c.value));
+      case "lt":
+        return num(cur) < num(coerce(c.value));
+      case "lte":
+        return num(cur) <= num(coerce(c.value));
+      case "is_true":
+        return cur === true || cur === "true" || num(cur) > 0;
+      case "is_false":
+        return !(cur === true || cur === "true" || num(cur) > 0);
+      case "has_clue":
+        return s.clues.includes((_a = c.value) != null ? _a : c.field);
+      case "has_visited":
+        return s.visited.includes((_b = c.value) != null ? _b : c.field);
+      case "time_before":
+        return s.time < parseTime((_c = c.value) != null ? _c : "00:00");
+      case "time_after":
+        return s.time >= parseTime((_d = c.value) != null ? _d : "00:00");
+      case "time_between": {
+        const range = ((_e = c.value) != null ? _e : "00:00-23:59").split("-");
+        const a = parseTime((_f = range[0]) != null ? _f : "00:00");
+        const b = parseTime((_g = range[1]) != null ? _g : "23:59");
+        return s.time >= a && s.time <= b;
+      }
+      default:
+        return true;
+    }
+  }
+  function evaluateConditions(cs, s) {
+    if (!cs || cs.length === 0) return true;
+    return cs.every((c) => evaluateCondition(c, s));
+  }
+  function explainFailing(cs, s) {
+    if (!cs) return "";
+    return cs.filter((c) => !evaluateCondition(c, s)).map((c) => `${c.field} ${c.op}${c.value != null ? " " + c.value : ""}`).join("; ");
+  }
+
+  // src/engine/effects.ts
+  function num2(v) {
+    if (typeof v === "number") return v;
+    if (typeof v === "boolean") return v ? 1 : 0;
+    if (v == null) return 0;
+    const n = Number(v);
+    return Number.isNaN(n) ? 0 : n;
+  }
+  function coerce2(v) {
+    if (v === "true") return true;
+    if (v === "false") return false;
+    if (v != null && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+    return v != null ? v : "";
+  }
+  function uniqPush(arr, x) {
+    return arr.includes(x) ? arr : [...arr, x];
+  }
+  function applyEffect(s, e, bounds) {
+    var _a, _b, _c, _d, _e, _f, _g;
+    switch (e.op) {
+      case "set": {
+        const v = coerce2(e.value);
+        const out = typeof v === "number" ? clampValue(v, bounds == null ? void 0 : bounds[e.field]) : v;
+        return { ...s, vars: { ...s.vars, [e.field]: out } };
+      }
+      case "increment": {
+        const v = num2(s.vars[e.field]) + num2(coerce2((_a = e.value) != null ? _a : "1"));
+        return { ...s, vars: { ...s.vars, [e.field]: clampValue(v, bounds == null ? void 0 : bounds[e.field]) } };
+      }
+      case "decrement": {
+        const v = num2(s.vars[e.field]) - num2(coerce2((_b = e.value) != null ? _b : "1"));
+        return { ...s, vars: { ...s.vars, [e.field]: clampValue(v, bounds == null ? void 0 : bounds[e.field]) } };
+      }
+      case "add_clue":
+        return { ...s, clues: uniqPush(s.clues, (_c = e.value) != null ? _c : e.field) };
+      case "remove_clue":
+        return { ...s, clues: s.clues.filter((x) => {
+          var _a2;
+          return x !== ((_a2 = e.value) != null ? _a2 : e.field);
+        }) };
+      case "add_item":
+        return { ...s, inventory: uniqPush(s.inventory, (_d = e.value) != null ? _d : e.field) };
+      case "remove_item":
+        return { ...s, inventory: s.inventory.filter((x) => {
+          var _a2;
+          return x !== ((_a2 = e.value) != null ? _a2 : e.field);
+        }) };
+      case "change_location":
+        return { ...s, location: (_e = e.value) != null ? _e : s.location };
+      case "add_minutes":
+        return { ...s, time: addMinutes(s.time, num2(coerce2(e.value))) };
+      case "mark_event_completed":
+        return { ...s, completedEvents: uniqPush(s.completedEvents, (_f = e.value) != null ? _f : e.field) };
+      case "mark_visited":
+        return { ...s, visited: uniqPush(s.visited, (_g = e.value) != null ? _g : e.field) };
+      default:
+        return s;
+    }
+  }
+  function applyEffects(s, es, bounds) {
+    if (!es) return s;
+    return es.reduce((acc, e) => applyEffect(acc, e, bounds), s);
+  }
+
+  // src/engine/resources.ts
+  function applyResourceStep(s, story, startTime) {
+    var _a, _b;
+    const resources = (_a = story.resources) != null ? _a : [];
+    if (resources.length === 0) return { state: s, log: [] };
+    const vars = { ...s.vars };
+    let changed = false;
+    let atZeroEndingId;
+    const log = [];
+    for (const r of resources) {
+      const bound = { min: r.min, max: r.max };
+      let value;
+      if (r.depletion) {
+        const steps = Math.floor((s.time - startTime) / r.depletion.everyMinutes);
+        value = clampValue(r.start - r.depletion.amount * steps, bound);
+      } else {
+        value = clampValue(Number((_b = vars[r.id]) != null ? _b : r.start), bound);
+      }
+      if (vars[r.id] !== value) {
+        vars[r.id] = value;
+        changed = true;
+      }
+      if (value <= r.min && r.atZero) {
+        if (r.atZero.setFlag && vars[r.atZero.setFlag] !== true) {
+          vars[r.atZero.setFlag] = true;
+          changed = true;
+          log.push(`Resource ${r.id} hit ${r.min}: set ${r.atZero.setFlag}`);
+        }
+        if (r.atZero.ending && !atZeroEndingId) {
+          atZeroEndingId = r.atZero.ending;
+          log.push(`Resource ${r.id} hit ${r.min}: ending ${r.atZero.ending}`);
+        }
+      }
+    }
+    return { state: changed ? { ...s, vars } : s, atZeroEndingId, log };
+  }
+
+  // src/engine/endingResolver.ts
+  function resolveEnding(s, story) {
+    const matched = story.endings.filter((e) => !e.isDefault && evaluateConditions(e.conditions, s));
+    if (matched.length) {
+      return matched.reduce((best, e) => {
+        var _a, _b;
+        return ((_a = e.priority) != null ? _a : 0) > ((_b = best.priority) != null ? _b : 0) ? e : best;
+      });
+    }
+    return story.endings.find((e) => e.isDefault);
+  }
+
+  // src/engine/scheduledEvents.ts
+  function checkScheduledEvents(s, story, bounds) {
+    let state = s;
+    let routedNodeId;
+    const log = [];
+    for (const ev of story.events) {
+      if (state.completedEvents.includes(ev.id)) continue;
+      if (!evaluateConditions(ev.trigger, state)) continue;
+      if (state.location === ev.eventLocation) {
+        state = { ...state, completedEvents: [...state.completedEvents, ev.id] };
+        if (!routedNodeId) routedNodeId = ev.ifPresentNode;
+        log.push(`Event ${ev.id} fired (present) -> ${ev.ifPresentNode}`);
+      } else {
+        state = applyEffects(state, ev.ifAbsentEffects, bounds);
+        state = { ...state, completedEvents: [...state.completedEvents, ev.id] };
+        log.push(`Event ${ev.id} fired (absent); clue recoverable at ${ev.recoveryNodeId}`);
+      }
+    }
+    return { state, routedNodeId, log };
+  }
+
+  // src/engine/engine.ts
+  var GameEngine = class {
+    constructor(story) {
+      this.log = [];
+      this.story = story;
+      this.state = initState(story);
+      this.currentId = story.startNodeId;
+      this.deadline = parseTime(story.deadline);
+      this.startTime = parseTime(story.startTime);
+      this.bounds = buildBounds(story);
+      this.enter(this.currentId);
+    }
+    node(id) {
+      const n = this.story.nodes.find((x) => x.id === id);
+      if (!n) throw new Error(`Unknown node: ${id}`);
+      return n;
+    }
+    enter(id) {
+      this.currentId = id;
+      const n = this.node(id);
+      this.state = applyEffects(this.state, n.entryEffects, this.bounds);
+      if (!this.state.visited.includes(id)) {
+        this.state = { ...this.state, visited: [...this.state.visited, id] };
+      }
+      const res = checkScheduledEvents(this.state, this.story, this.bounds);
+      this.state = res.state;
+      if (res.log.length) this.log.push(...res.log);
+      if (res.routedNodeId && res.routedNodeId !== id) {
+        this.enter(res.routedNodeId);
+        return;
+      }
+      const rstep = applyResourceStep(this.state, this.story, this.startTime);
+      this.state = rstep.state;
+      if (rstep.log.length) this.log.push(...rstep.log);
+      if (!this.ending && rstep.atZeroEndingId) {
+        const e = this.story.endings.find((x) => x.id === rstep.atZeroEndingId);
+        if (e) {
+          this.ending = e;
+          this.log.push(`Ending: ${e.id}`);
+        }
+      }
+      if (!this.ending && (n.resolvesEnding || this.state.time >= this.deadline)) {
+        this.ending = resolveEnding(this.state, this.story);
+        if (this.ending) this.log.push(`Ending: ${this.ending.id}`);
+      }
+    }
+    start() {
+      return this.view();
+    }
+    view() {
+      const n = this.node(this.currentId);
+      const choices = (n.choices || []).map((c) => {
+        const ok = evaluateConditions(c.conditions, this.state);
+        return ok ? { id: c.id, label: c.label, available: true } : { id: c.id, label: c.label, available: false, lockedReason: explainFailing(c.conditions, this.state) };
+      });
+      return {
+        node: n,
+        time: this.state.time,
+        timeLabel: formatTime(this.state.time),
+        location: this.state.location,
+        choices,
+        state: this.state,
+        log: [...this.log],
+        endingReached: this.ending
+      };
+    }
+    choose(choiceId) {
+      if (this.ending) return this.view();
+      const n = this.node(this.currentId);
+      const choice = (n.choices || []).find((c) => c.id === choiceId);
+      if (!choice) throw new Error(`Unknown choice: ${choiceId}`);
+      if (!evaluateConditions(choice.conditions, this.state)) {
+        throw new Error(`Choice not available: ${choiceId}`);
+      }
+      this.state = applyEffects(this.state, choice.effects, this.bounds);
+      this.enter(choice.destination);
+      return this.view();
+    }
+    snapshot() {
+      var _a;
+      return {
+        version: 1,
+        storyId: this.story.id,
+        currentId: this.currentId,
+        state: JSON.parse(JSON.stringify(this.state)),
+        log: [...this.log],
+        endingId: (_a = this.ending) == null ? void 0 : _a.id
+      };
+    }
+    restore(snap) {
+      if (snap.version !== 1) throw new Error(`Unsupported snapshot version: ${snap.version}`);
+      if (snap.storyId !== this.story.id) {
+        throw new Error(`Snapshot is for story ${snap.storyId}, not ${this.story.id}`);
+      }
+      this.state = JSON.parse(JSON.stringify(snap.state));
+      this.currentId = snap.currentId;
+      this.log = [...snap.log];
+      this.ending = snap.endingId ? this.story.endings.find((e) => e.id === snap.endingId) : void 0;
+    }
+    gotoNode(id) {
+      this.enter(id);
+      return this.view();
+    }
+  };
+
+  // src/experiments/sump-line/carry.ts
+  function minutesToClock(min) {
+    const m = Math.max(0, Math.round(min));
+    const hh = Math.floor(m / 60);
+    const mm = m % 60;
+    return `${hh}:${mm < 10 ? "0" : ""}${mm}`;
+  }
+  function extractCarry(state, contract) {
+    const vars = {};
+    if (contract.vars === "all") Object.assign(vars, state.vars);
+    else for (const k of contract.vars) if (k in state.vars) vars[k] = state.vars[k];
+    for (const id of contract.resources) if (id in state.vars) vars[id] = state.vars[id];
+    return {
+      vars,
+      clues: contract.clues === false ? [] : [...state.clues],
+      inventory: contract.inventory === false ? [] : [...state.inventory]
+    };
+  }
+  function seedChapterStory(story, carry, gameElapsedMinutes, gameDeadlineMinutes) {
+    var _a, _b;
+    const s = JSON.parse(JSON.stringify(story));
+    for (const v of s.variables) {
+      if (Object.prototype.hasOwnProperty.call(carry.vars, v.name)) v.default = carry.vars[v.name];
+    }
+    for (const r of (_a = s.resources) != null ? _a : []) {
+      if (Object.prototype.hasOwnProperty.call(carry.vars, r.id)) r.start = Number(carry.vars[r.id]);
+    }
+    const start = s.nodes.find((n) => n.id === s.startNodeId);
+    if (start) {
+      const seedEffects = [
+        ...carry.clues.map((c) => ({ field: "clues", op: "add_clue", value: c })),
+        ...carry.inventory.map((i) => ({ field: "inventory", op: "add_item", value: i }))
+      ];
+      start.entryEffects = [...seedEffects, ...(_b = start.entryEffects) != null ? _b : []];
+    }
+    if (gameDeadlineMinutes !== void 0) {
+      const chapterStart = parseTime(s.startTime);
+      const projected = chapterStart + Math.max(0, gameDeadlineMinutes - gameElapsedMinutes);
+      const eff = Math.max(chapterStart, Math.min(parseTime(s.deadline), projected));
+      s.deadline = minutesToClock(eff);
+    }
+    return s;
+  }
+
+  // src/experiments/sump-line/transitions.ts
+  function pickNextChapter(chapter, finalState, endingId) {
+    for (const t of chapter.transitions) {
+      if (t.when.endingId !== void 0 && t.when.endingId !== endingId) continue;
+      if (t.when.conditions && !evaluateConditions(t.when.conditions, finalState)) continue;
+      return t.goTo;
+    }
+    return void 0;
+  }
+
+  // src/experiments/sump-line/GameRunner.ts
+  var EMPTY_CARRY = { vars: {}, clues: [], inventory: [] };
+  var MAX_TRANSITIONS = 1e3;
+  var GameRunner = class {
+    constructor(game) {
+      this.currentChapterId = "";
+      this.carriedIn = EMPTY_CARRY;
+      this.gameElapsedMinutes = 0;
+      this.gameOver = false;
+      this.transitionCount = 0;
+      this.game = game;
+      this.startChapter(game.startChapterId, EMPTY_CARRY);
+    }
+    chapter(id) {
+      const c = this.game.chapters.find((x) => x.id === id);
+      if (!c) throw new Error(`Unknown chapter: ${id}`);
+      return c;
+    }
+    startChapter(chapterId, carry) {
+      const ch = this.chapter(chapterId);
+      this.currentChapterId = chapterId;
+      this.carriedIn = carry;
+      const seeded = seedChapterStory(ch.story, carry, this.gameElapsedMinutes, this.game.gameDeadlineMinutes);
+      this.engine = new GameEngine(seeded);
+      this.settle();
+    }
+    // If the current chapter has ended, bank its elapsed time and transition (recursively).
+    settle() {
+      const v = this.engine.view();
+      if (!v.endingReached || this.gameOver) return;
+      const ch = this.chapter(this.currentChapterId);
+      this.gameElapsedMinutes += v.state.time - parseTime(ch.story.startTime);
+      if (ch.gameEnding) {
+        this.gameOver = true;
+        this.finalEndingId = v.endingReached.id;
+        return;
+      }
+      if (++this.transitionCount > MAX_TRANSITIONS) {
+        throw new Error(`Transition limit exceeded near chapter ${this.currentChapterId} (cycle?)`);
+      }
+      const carry = extractCarry(v.state, this.game.carry);
+      const next = pickNextChapter(ch, v.state, v.endingReached.id);
+      if (!next) {
+        this.gameOver = true;
+        this.finalEndingId = v.endingReached.id;
+        return;
+      }
+      this.startChapter(next, carry);
+    }
+    start() {
+      return this.view();
+    }
+    view() {
+      const v = this.engine.view();
+      const ch = this.chapter(this.currentChapterId);
+      return {
+        ...v,
+        chapterId: this.currentChapterId,
+        chapterTitle: ch.title,
+        gameElapsedMinutes: this.gameElapsedMinutes,
+        gameOver: this.gameOver,
+        finalEndingId: this.finalEndingId
+      };
+    }
+    choose(choiceId) {
+      if (this.gameOver) return this.view();
+      this.engine.choose(choiceId);
+      this.settle();
+      return this.view();
+    }
+    snapshot() {
+      return {
+        gameId: this.game.id,
+        currentChapterId: this.currentChapterId,
+        gameElapsedMinutes: this.gameElapsedMinutes,
+        carriedIn: JSON.parse(JSON.stringify(this.carriedIn)),
+        chapter: this.engine.snapshot()
+      };
+    }
+    // Restore expects a snapshot taken DURING play (no pending un-transitioned ending).
+    // FINDING (ENGINE-ASSESSMENT): the engine snapshots one chapter; the game snapshot wraps it with
+    // chapter id + game clock + the carry that seeded the chapter.
+    restore(snap) {
+      if (snap.gameId !== this.game.id) throw new Error(`Snapshot is for game ${snap.gameId}, not ${this.game.id}`);
+      this.gameElapsedMinutes = snap.gameElapsedMinutes;
+      this.currentChapterId = snap.currentChapterId;
+      this.carriedIn = snap.carriedIn;
+      this.gameOver = false;
+      this.finalEndingId = void 0;
+      const ch = this.chapter(snap.currentChapterId);
+      const seeded = seedChapterStory(ch.story, snap.carriedIn, snap.gameElapsedMinutes, this.game.gameDeadlineMinutes);
+      this.engine = new GameEngine(seeded);
+      this.engine.restore(snap.chapter);
+    }
+  };
+
+  // src/experiments/sump-line/content/ch1Descent.ts
+  var ch1Descent = {
+    id: "ch1_descent",
+    title: "The Pulse",
+    startNodeId: "n_drop",
+    startTime: "13:00",
+    deadline: "14:30",
+    // window 90 min; longest path == 90 (see clock note)
+    startLocation: "surface_pitch",
+    variables: [
+      { name: "cave_route", type: "string", default: "sump", purpose: "The chapter-fork: 'high' (dry traverse) or 'sump' (the water). Default 'sump' so a passive/timed-out path forks deterministically." },
+      { name: "companion_status", type: "string", default: "hurt", purpose: "Rolly's state: 'hurt' | 'with_you' | 'lost'. Carries across chapters; gates content and endings." },
+      { name: "cave_someone_lost", type: "boolean", default: false, purpose: "Latching: set true only when the companion is stranded/lost. Pyrrhic/loss endings require it." },
+      { name: "cave_all_together", type: "boolean", default: false, purpose: "Latching: set true only at the safe hub when Rolly is still with you. The clean ending requires it." },
+      { name: "cave_dark_out", type: "boolean", default: false, purpose: "Latching, paired with lamp_charge at-zero. Dark endings require it (keeps the at-zero path honestly gated)." },
+      { name: "cave_hypothermic", type: "boolean", default: false, purpose: "Latching, paired with body_heat at-zero. Cold flavour/endings gate on it." },
+      { name: "cave_sump_sealed", type: "boolean", default: false, purpose: "Latching: the low sump duck has sealed (witnessed or heard). The sealed-in ending requires it." }
+    ],
+    locations: [
+      { id: "surface_pitch", name: "Head of the Pitch" },
+      { id: "stream_passage", name: "The Streamway" },
+      { id: "choke", name: "The Boulder Choke" },
+      { id: "sump_pool", name: "The Sump Pool" },
+      { id: "choke_ledge", name: "The Dry Ledge" }
+    ],
+    resources: [
+      // Carried survival meters (the container rebases `start` from the carried value on entry).
+      { id: "lamp_charge", label: "Lamp", min: 0, max: 100, start: 60, depletion: { everyMinutes: 12, amount: 5 }, atZero: { setFlag: "cave_dark_out" } },
+      // start 60: a morning's use already spent (per the opening keystone)
+      { id: "body_heat", label: "Warmth", min: 0, max: 100, start: 100, depletion: { everyMinutes: 20, amount: 5 }, atZero: { setFlag: "cave_hypothermic" } },
+      // Chapter-local, choice-driven (no depletion): how high the water has risen.
+      { id: "flood_water", label: "Water", min: 0, max: 3, start: 0 }
+    ],
+    events: [
+      {
+        id: "ev_sump_seal",
+        title: "The Sump Seals",
+        trigger: [{ field: "time", op: "time_after", value: "14:00" }],
+        eventLocation: "sump_pool",
+        ifPresentNode: "n_seal_present",
+        ifAbsentEffects: [
+          { field: "cave_sump_sealed", op: "set", value: "true" },
+          { field: "clues", op: "add_clue", value: "clue_sump_sealed" }
+        ],
+        recoveryNodeId: "n_choke_hub"
+      }
+    ],
+    nodes: [
+      // 1 — opening
+      {
+        id: "n_drop",
+        title: "Head of the Pitch",
+        type: "scene",
+        location: "surface_pitch",
+        entryEffects: [{ field: "location", op: "change_location", value: "surface_pitch" }],
+        body: "Cold comes up out of the shaft to meet you, the breath of moving water somewhere a long way down, and you stand at the head of the pitch with the rope running black over the edge.\n\nWhitethroat takes the afternoon\u2019s light and keeps it. Behind you, past the entrance crawl, it is {{time}} and grey and ordinary on the hill. Here there is only the lamp on your helmet, a small hard disc of white laid on the rock, and the dark crowding its edge the way it always does, patient, waiting for the battery to tire.\n\nRolly is above you on the pitch, racking up, breath fogging, cheerful in the way of someone who has done this a hundred times. \u201CStreamway\u2019s loud today,\u201D Rolly says, and laughs, and the laugh goes down the shaft and does not come back. The water far below answers nothing. It is not loud at you. It is just loud.\n\nYou check the rack, you check the light, you feel the cold already starting to look for the gaps in your wetsuit. You lean back against the rope and let the pitch take your weight.",
+        choices: [
+          { id: "c_down", label: "Down the pitch into the streamway.", destination: "n_stream", effects: [{ field: "time", op: "add_minutes", value: "15" }] }
+        ]
+      },
+      // 2 — the pulse hits
+      {
+        id: "n_stream",
+        title: "The Streamway",
+        type: "event",
+        location: "stream_passage",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "stream_passage" },
+          { field: "companion_status", op: "set", value: "hurt" },
+          { field: "flood_water", op: "increment", value: "1" },
+          { field: "clues", op: "add_clue", value: "clue_pulse" }
+        ],
+        body: "The streamway is a low rifting passage and the water is running fast and brown along its floor, and you are forty feet in, bent double, when the cave changes its mind.\n\nYou hear it before you understand it \u2014 a rising note up the passage, a pressure in your ears \u2014 and then the pulse comes through, a shoulder of water that was not there a breath ago, and it takes your legs and it takes Rolly harder. There is a sound a body makes against rock that you will not forget. When the surge drops back, Rolly is down in the running water with one boot wedged wrong in the floor and a face gone the colour of the rock.\n\n\u201CAnkle,\u201D Rolly says, through teeth, not looking at it. \u201CIt\u2019s the ankle. Don\u2019t \u2014 just give me a second.\u201D\n\nThe water is still rising at your shins. A second is the one thing the cave is not offering.",
+        choices: [
+          { id: "c_to_rolly", label: "Get down to Rolly.", destination: "n_rolly", effects: [{ field: "time", op: "add_minutes", value: "10" }] }
+        ]
+      },
+      // 3 — the companion decision
+      {
+        id: "n_rolly",
+        title: "Rolly Down",
+        type: "conversation",
+        location: "stream_passage",
+        entryEffects: [{ field: "location", op: "change_location", value: "stream_passage" }],
+        body: "You get a hand under Rolly\u2019s arm and the two of you sit a moment in the cold running water while the ankle is looked at and not looked at. It is bad. Not bone-through-skin bad, but the kind of bad that does not carry its own weight out of a cave.\n\nThe only known way out is the sump \u2014 the low duck under the boulder choke ahead, a short dive through into the next passage \u2014 and the water that just rose is the water that feeds it. Above the choke there is dry country, a longer way, a harder climb. Both of those are forward. Behind you the pitch is a waterfall now.\n\nRolly watches you do the arithmetic. \u201CI can hop,\u201D Rolly says, which is a lie you are both allowed. \u201CGo on. Don\u2019t look at me like that.\u201D",
+        choices: [
+          { id: "c_stabilise", label: "Splint the ankle and take Rolly with you \u2014 slower, but together.", destination: "n_carry", conditions: [{ field: "companion_status", op: "equals", value: "hurt" }], effects: [{ field: "time", op: "add_minutes", value: "20" }] },
+          { id: "c_push", label: "No time to splint \u2014 push for the choke, Rolly limping behind.", destination: "n_choke_hub", effects: [{ field: "time", op: "add_minutes", value: "10" }, { field: "flood_water", op: "increment", value: "1" }] }
+        ]
+      },
+      // 4 — carry (sets with_you, unconditional)
+      {
+        id: "n_carry",
+        title: "Shouldering Rolly",
+        type: "scene",
+        location: "stream_passage",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "stream_passage" },
+          { field: "companion_status", op: "set", value: "with_you" }
+        ],
+        body: "You splint the ankle with a tackle-bag strap and two cold hands, and you get Rolly\u2019s arm over your shoulders, and you stand the two of you up out of the water like one tired animal.\n\nIt is slow. Every step is a negotiation between Rolly\u2019s weight and the floor and the current, and your lamp throws both your shadows huge and shaking on the passage wall. But you are moving, and you are moving together, and that is going to have to be worth what it costs.\n\n\u201CThanks,\u201D Rolly says, very quietly, once, and then doesn\u2019t say it again.",
+        choices: [
+          { id: "c_carry_on", label: "Carry on toward the choke.", destination: "n_choke_hub", effects: [{ field: "time", op: "add_minutes", value: "20" }] }
+        ]
+      },
+      // 5 — the fork hub (also recoveryNodeId for the seal event). State-agnostic prose.
+      {
+        id: "n_choke_hub",
+        title: "The Boulder Choke",
+        type: "transition",
+        location: "choke",
+        entryEffects: [{ field: "location", op: "change_location", value: "choke" }],
+        body: "The boulder choke is where the passage chokes itself half shut \u2014 a fall of car-sized blocks the cave dropped here in some older flood, with the water finding its way through the low gaps in white roaring threads. Down at the bottom, under the blocks, is the sump duck: the short drowned crawl that is the only known low way out. Above, a dry rift climbs away into the dark, breathing cold air down into your face.\n\nYou stand in the noise with Rolly and look at the two ways the cave has left you. The low one is fast and short and under water. The high one is dry and long and a climb. Your lamp\u2019s disc shivers on the wet blocks; the battery is tiring, and the dark at the edge of the light has come in a little closer than it was.\n\nDown, or up. The water is not going to wait for you to decide.",
+        choices: [
+          { id: "c_scout_high", label: "Scout the dry rift, up over the choke.", destination: "n_high_decide", effects: [{ field: "time", op: "add_minutes", value: "10" }] },
+          { id: "c_check_low", label: "Climb down to the sump duck and look at the low way.", destination: "n_seal_present", conditions: [{ field: "cave_sump_sealed", op: "is_false" }], effects: [{ field: "location", op: "change_location", value: "sump_pool" }, { field: "time", op: "add_minutes", value: "10" }] },
+          { id: "c_godown", label: "Commit straight to the water \u2014 it\u2019s rising fast.", destination: "n_take_low", conditions: [{ field: "flood_water", op: "gte", value: "2" }], effects: [{ field: "time", op: "add_minutes", value: "10" }] }
+        ]
+      },
+      // 6 — high commit hub
+      {
+        id: "n_high_decide",
+        title: "The Dry Ledge",
+        type: "discovery",
+        location: "choke_ledge",
+        entryEffects: [{ field: "location", op: "change_location", value: "choke_ledge" }],
+        body: "You climb up off the choke onto a dry ledge, and for the first time since the pulse the roar drops behind you to a steady underground weather. The air here is older, stiller, colder. Above, the rift goes up and on \u2014 the high traverse, the long dry way you have only ever heard described in the club hut, never walked.\n\nRolly gets up beside you or does not, depending on what you decided below. Either way the ledge is dry, and the lamp is dimmer than it was an hour ago, and the high way is the way that does not have water in it.\n\nHow you take it \u2014 and who you take \u2014 is the next thing the cave makes you choose.",
+        choices: [
+          { id: "c_lead_up", label: "Lead Rolly up onto the high route with you.", destination: "n_set_together", conditions: [{ field: "companion_status", op: "equals", value: "with_you" }], effects: [{ field: "time", op: "add_minutes", value: "10" }] },
+          { id: "c_strand", label: "Rolly can\u2019t make the climb \u2014 fix a line, go up alone.", destination: "n_strand_rolly", conditions: [{ field: "companion_status", op: "not_equals", value: "with_you" }], effects: [{ field: "time", op: "add_minutes", value: "5" }] },
+          { id: "c_commit_high", label: "Commit to the high traverse and go.", destination: "n_take_high", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      // 7 — together latch (unconditional)
+      {
+        id: "n_set_together",
+        title: "Together on the Ledge",
+        type: "scene",
+        location: "choke_ledge",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "choke_ledge" },
+          { field: "cave_all_together", op: "set", value: "true" }
+        ],
+        body: "You get Rolly up onto the ledge beside you, both of you on the dry rock, both of you breathing like the climb cost more than it did. The splint has held. The ankle is a problem you are carrying forward whole, not a person you are leaving behind.\n\n\u201CStill a team,\u201D Rolly says, and means it as a question. You don\u2019t answer, because answering it out loud would be tempting the cave. But you are. For now you are.",
+        choices: [
+          { id: "c_on_high", label: "On to the high traverse, together.", destination: "n_take_high", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      // 8 — strand latch (unconditional set lost + someone_lost)
+      {
+        id: "n_strand_rolly",
+        title: "Leaving the Line",
+        type: "scene",
+        location: "choke_ledge",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "choke_ledge" },
+          { field: "companion_status", op: "set", value: "lost" },
+          { field: "cave_someone_lost", op: "set", value: "true" },
+          { field: "clues", op: "add_clue", value: "clue_left_rolly" }
+        ],
+        body: "There is no version of the high climb that Rolly\u2019s ankle survives, and you both know it before either of you says it. You fix a line down to the ledge below and clip Rolly to it, where it is dry, where the water cannot reach \u2014 yet.\n\n\u201CGo,\u201D Rolly says. \u201CGet out, send people in. I\u2019m fine here. I\u2019m fine.\u201D The third time is the one neither of you believes.\n\nYou climb. Below you Rolly\u2019s lamp becomes a smaller and smaller coin on the rock, and then the rift takes you round a corner and it is gone, and there is only your own light and the dry dark and the thing you are choosing to do.",
+        choices: [
+          { id: "c_climb_alone", label: "Climb up to the high traverse.", destination: "n_take_high", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      // 9 — high route commit (resolves the high fork)
+      {
+        id: "n_take_high",
+        title: "Over the Choke",
+        type: "transition",
+        location: "choke_ledge",
+        resolvesEnding: true,
+        entryEffects: [
+          { field: "location", op: "change_location", value: "choke_ledge" },
+          { field: "cave_route", op: "set", value: "high" }
+        ],
+        body: "You crest the top of the choke and the dry rift opens out ahead of you into the upper system, and the sound of the flood drops away below and behind until it is just the cave\u2019s own breathing again.\n\nThe water is behind you now. Everything ahead is up, and dry, and dark, and a long way.",
+        choices: []
+      },
+      // 10 — the seal (present node / reached by choice). Marks the event done to avoid a later absent re-fire.
+      {
+        id: "n_seal_present",
+        title: "The Sump Seals",
+        type: "event",
+        location: "sump_pool",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "sump_pool" },
+          { field: "cave_sump_sealed", op: "set", value: "true" },
+          { field: "clues", op: "add_clue", value: "clue_saw_seal" },
+          { field: "ev_sump_seal", op: "mark_event_completed" }
+        ],
+        body: "You climb down to the lip of the sump pool just as the mountain decides.\n\nThe duck has been shrinking the whole while \u2014 a hand\u2019s width of black airspace between the water and the rock roof, the only low way out, the brown flood climbing it without hurry or malice. There is no drama in it. The water rises because somewhere up the hill more water is coming down, and it does not know you are here.\n\nThen the airspace closes. It does not slam. It draws shut \u2014 the water meets the rock with a long sucking roar, air punched out sideways in a cold spray across your face \u2014 and where there was a way through there is only the pool, smooth and full and final.\n\nThe low way out is gone. You saw it close. You will not have to wonder, later, whether you might have made it. You know.",
+        choices: [
+          { id: "c_commit_water", label: "Commit to the water anyway \u2014 the sealed crawl is still a crawl.", destination: "n_take_low", effects: [{ field: "time", op: "add_minutes", value: "5" }] },
+          { id: "c_retreat", label: "Turn back for the choke and the high way.", destination: "n_choke_hub", effects: [{ field: "location", op: "change_location", value: "choke" }, { field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      // 11 — sump route commit (resolves the default fork)
+      {
+        id: "n_take_low",
+        title: "Down Into the Water",
+        type: "transition",
+        location: "sump_pool",
+        resolvesEnding: true,
+        entryEffects: [
+          { field: "location", op: "change_location", value: "sump_pool" },
+          { field: "cave_route", op: "set", value: "sump" }
+        ],
+        body: "You lower yourself into the cold flood at the bottom of the choke, and the water closes over your legs and then your chest, and the only way on now is a drowned one.\n\nWhatever air there is ahead, you will find by feel, in the dark, under the rock. You take a breath the cave lets you take, and you go down into the water.",
+        choices: []
+      }
+    ],
+    endings: [
+      {
+        id: "ch1_to_high",
+        name: "Up Over the Choke",
+        summary: "You commit to the dry high traverse; the way out is up.",
+        conditions: [{ field: "cave_route", op: "equals", value: "high" }]
+      },
+      {
+        id: "ch1_to_sump",
+        name: "Down Into the Water",
+        summary: "You commit to the water, or the clock commits you; the way out is a drowned one.",
+        isDefault: true,
+        conditions: []
+      }
+    ]
+  };
+
+  // src/experiments/sump-line/content/ch2High.ts
+  var ch2High = {
+    id: "ch2_high",
+    title: "The Dry High Traverse",
+    startNodeId: "n_h_start",
+    startTime: "14:30",
+    deadline: "15:35",
+    // window 65; longest path == 65
+    startLocation: "high_rift",
+    variables: [
+      { name: "companion_status", type: "string", default: "with_you", purpose: "Rolly's carried state: 'with_you' | 'hurt' | 'lost'. Gates content and endings." },
+      { name: "cave_someone_lost", type: "boolean", default: false, purpose: "Latching: the companion is lost. Required by the pyrrhic ending." },
+      { name: "cave_all_together", type: "boolean", default: false, purpose: "Latching (carried from ch1): kept Rolly with you. Required by the clean ending." },
+      { name: "cave_dark_out", type: "boolean", default: false, purpose: "Latching, paired with lamp at-zero. Required by the dark ending." },
+      { name: "cave_hypothermic", type: "boolean", default: false, purpose: "Latching, paired with body_heat at-zero. Blocks the clean ending; colours others." }
+    ],
+    locations: [
+      { id: "high_rift", name: "The Aven Rift" },
+      { id: "oxbow", name: "The Oxbow Bypass" },
+      { id: "crystal_hall", name: "Crystal Hall" },
+      { id: "daylight_shaft", name: "The Daylight Shaft" }
+    ],
+    resources: [
+      { id: "lamp_charge", label: "Lamp", min: 0, max: 100, start: 60, depletion: { everyMinutes: 12, amount: 5 }, atZero: { ending: "end_dark_high", setFlag: "cave_dark_out" } },
+      // standalone start 60; the container rebases to the carried value
+      { id: "body_heat", label: "Warmth", min: 0, max: 100, start: 100, depletion: { everyMinutes: 20, amount: 5 }, atZero: { setFlag: "cave_hypothermic" } },
+      { id: "rope_pitches", label: "Rope", min: 0, max: 2, start: 2 }
+    ],
+    events: [
+      {
+        id: "ev_second_pulse",
+        title: "The Bypass Goes Under",
+        trigger: [{ field: "time", op: "time_after", value: "14:55" }],
+        eventLocation: "oxbow",
+        ifPresentNode: "n_pulse_present",
+        ifAbsentEffects: [{ field: "clues", op: "add_clue", value: "clue_pulse_cutoff" }],
+        recoveryNodeId: "n_crystal_hub"
+      }
+    ],
+    nodes: [
+      {
+        id: "n_h_start",
+        title: "The Aven Rift",
+        type: "scene",
+        location: "high_rift",
+        entryEffects: [{ field: "location", op: "change_location", value: "high_rift" }],
+        body: "Over the choke the air goes dry and the cold changes its character. Down in the streamway the cold was wet and loud. Up here it is silent and patient, and it gets into the bone.\n\nYou stand at the foot of the aven rift, a tall blade of darkness climbing away above your lamp\u2019s reach. Your breath fogs and hangs. The water is behind you now, a sound dropped to a distant rumour somewhere below the floor. It is {{time}}, though up here that means nothing \u2014 there is no light to tell it by but the small white coin on your helmet, and that coin is smaller than it was at the pitch head. The battery has given the morning to the dark already. It will give the rest.\n\nYou flex your fingers. The cold has started to make them stupid, slow on the rock, and you have a long dry climb ahead before there is any chance of grey sky. The rift goes up. You can free-climb it fast and spend the warmth you have, or rig it slow and safe and spend the light instead.",
+        choices: [
+          { id: "c_freeclimb", label: "Free-climb the rift fast \u2014 spend the warmth, save the light.", destination: "n_oxbow", effects: [{ field: "time", op: "add_minutes", value: "20" }] },
+          { id: "c_rig", label: "Rig a protected line \u2014 slower and safer, but the lamp burns.", destination: "n_oxbow", effects: [{ field: "time", op: "add_minutes", value: "30" }, { field: "rope_pitches", op: "decrement", value: "1" }] }
+        ]
+      },
+      {
+        id: "n_oxbow",
+        title: "The Oxbow Bypass",
+        type: "event",
+        location: "oxbow",
+        entryEffects: [{ field: "location", op: "change_location", value: "oxbow" }],
+        body: "The rift tops out into the oxbow: a dry abandoned meander of the old streamway, a ribbon of stone bridging a black void. Far below, down in the gulf the bypass spans, you can hear water moving \u2014 a deep, patient sound \u2014 but your lamp cannot reach it and you cannot see it. There is only the dry span ahead and the dark on either hand.\n\nYou start across, one boot in front of the other on the cold stone, the void breathing up at you. The lamp lays its shrinking disc on the rock a few feet ahead. The cave is in no hurry. You are.",
+        choices: [
+          { id: "c_cross", label: "Cross the bypass to Crystal Hall.", destination: "n_crystal_hub", effects: [{ field: "time", op: "add_minutes", value: "20" }] }
+        ]
+      },
+      {
+        id: "n_pulse_present",
+        title: "The Bypass Goes Under",
+        type: "event",
+        location: "oxbow",
+        entryEffects: [{ field: "location", op: "change_location", value: "oxbow" }],
+        body: "You are out on the oxbow bypass, mid-span over the void, when the roar climbs up to meet you.\n\nIt comes from below \u2014 from the black gulf the bypass bridges, the place where you could hear water but not see it. A second pulse, surging up the system from the drowned streamway, coming fast. The sound rises through the rock and through the soles of your boots and then the water itself is there, a brown lip clawing over the abandoned meander, taking the dry floor you are standing on and making it a river.\n\nThe cold of it hits before the wet does. Your lamp\u2019s disc jumps and skitters on the heaving surface. There is no time to think it through; there is only the far side, and the water between you and it rising while you watch. The cave is not trying to take you. The water is only doing what water does when more of it arrives than the passage can hold. But knowing that does not give you back the seconds the flood is eating.",
+        choices: [
+          { id: "c_haul", label: "Haul Rolly across ahead of the surge.", destination: "n_crystal_hub", conditions: [{ field: "companion_status", op: "equals", value: "with_you" }], effects: [{ field: "time", op: "add_minutes", value: "15" }, { field: "rope_pitches", op: "decrement", value: "1" }] },
+          { id: "c_cross_fast", label: "Cross fast and don\u2019t look back.", destination: "n_lose_here", effects: [{ field: "time", op: "add_minutes", value: "10" }] }
+        ]
+      },
+      {
+        id: "n_lose_here",
+        title: "Cut Off Behind",
+        type: "scene",
+        location: "oxbow",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "oxbow" },
+          { field: "cave_someone_lost", op: "set", value: "true" },
+          { field: "companion_status", op: "set", value: "lost" },
+          { field: "clues", op: "add_clue", value: "clue_oxbow_cut" }
+        ],
+        body: "You go for the far side and you go alone, and you do not look back until your boots are on dry stone again and the water is between you and where you were.\n\nThe bypass is a river now, lip to lip, and the dry span you crossed not a minute ago is gone under brown water that rose when water rises and did not care whose side anyone was on. Whoever was behind you is on the far side of that water. You can shout. You do shout. The roar takes it and gives nothing back.\n\nYou made the crossing. You did not make it whole. That is a thing you decided in the half-second the flood gave you to decide it, and it is yours now, the particular shape of it, to carry up into the light if you reach the light.",
+        choices: [
+          { id: "c_on_crystal", label: "Push on to Crystal Hall.", destination: "n_crystal_hub", effects: [{ field: "time", op: "add_minutes", value: "15" }] }
+        ]
+      },
+      {
+        id: "n_crystal_hub",
+        title: "Crystal Hall",
+        type: "transition",
+        location: "crystal_hall",
+        entryEffects: [{ field: "location", op: "change_location", value: "crystal_hall" }],
+        body: "Crystal Hall is a cold glittering throat of calcite, your lamp throwing its small light across a thousand wet facets, none of them warm. The way back is closed behind you now \u2014 the oxbow gone under, or going \u2014 and the only way left is up: a final shaft climbing toward whatever grey the afternoon still has.\n\nThe cold here is the static, bone-deep kind, the kind that bleeds the warmth out of you while you stand still doing nothing. Your lamp is dimmer than it was at the rift; the disc has pulled in, the dark crowding closer at its rim. You make yourself keep moving, because moving is warmth and standing is the cold getting its hands properly into you.\n\nThe shaft is there. The light is going. You decide how you take it.",
+        choices: [
+          { id: "c_rig_shaft", label: "Rig the shaft properly and climb.", destination: "n_climb", conditions: [{ field: "rope_pitches", op: "gte", value: "1" }], effects: [{ field: "time", op: "add_minutes", value: "20" }, { field: "rope_pitches", op: "decrement", value: "1" }] },
+          { id: "c_freeclimb_shaft", label: "Free-climb the shaft \u2014 no rope, no time to spare.", destination: "n_climb", effects: [{ field: "time", op: "add_minutes", value: "10" }] }
+        ]
+      },
+      {
+        id: "n_climb",
+        title: "The Daylight Shaft",
+        type: "transition",
+        location: "daylight_shaft",
+        resolvesEnding: true,
+        entryEffects: [{ field: "location", op: "change_location", value: "daylight_shaft" }],
+        body: "The shaft goes up into the dark above your light, and somewhere far up it there is grey, or the memory of grey, or nothing. You set your hands on the cold rock and start to climb the last of the cave.",
+        choices: []
+      }
+    ],
+    endings: [
+      {
+        id: "end_dark_high",
+        name: "The Cave Keeps You",
+        summary: "The lamp died on the traverse; the dark, which was always going to win the race, has you.",
+        priority: 2,
+        conditions: [{ field: "cave_dark_out", op: "is_true" }],
+        body: "You are climbing the daylight shaft toward grey light impossibly far up when the lamp gives out.\n\nIt does not flicker and rally the way it has all afternoon. It dims, and dims, the small white disc pulling in to a coal, to a thread, to a memory of light on the rock six inches from your face \u2014 and then it is gone, and the dark you have been outrunning since the pitch head is simply there, total, with no edge to it at all.\n\nThe cave does not change. The shaft is the same shaft, the cold the same cold, the grey mouth of daylight still up there somewhere beyond the reach of any light you have left. The dark was always going to win this race; the battery only ever borrowed the afternoon from it. Now the loan is called.\n\nYou hold the rock. You can hear your own breath, and the far drip of water, and nothing that will tell you which way is up except the slow pull in your arms. You climb blind, a hand and a hand and a foot, into a darkness the cave has held since before there were eyes to be lost in it. Somewhere above is the light, and the {{time}} sky, and the ordinary afternoon you came down out of.\n\nThe cave is in no hurry. It has you, and the dark, and all the time there is."
+      },
+      {
+        id: "end_out_not_whole",
+        name: "Out, But Not Whole",
+        summary: "You climb out into the rain \u2014 and not in any way you wanted. Rolly is behind the water.",
+        priority: 1,
+        conditions: [{ field: "cave_someone_lost", op: "is_true" }],
+        body: "You come up the last of the shaft into grey, and the grey is daylight, and the daylight is real. It is thin and cold and the most the hill has to give at {{time}}, but it is sky, and you climb out into it on hands and knees and lie in the wet heather with the rain on your face and breathe air that no rock has been sitting on. You made it. The cave let you have this.\n\nIt did not let you have all of it. Rolly is not beside you. Somewhere back in the dark, on the wrong side of water that rose when water rises and did not care whose side anyone was on, Rolly is behind you \u2014 left, lost, cut off, the particular shape of it your own to carry. You climbed out lighter than you went in, and not in any way you wanted.\n\nThe lamp still burns its small disc, useless now in the open. You should turn it off. You don\u2019t, not yet. You lie in the rain looking back at the black slot in the hillside, and the cave looks back the way it always does, which is not at all.\n\nThere will be a call-out. Lights, ropes, people who do this. Maybe in time, maybe not in time; the mountain keeps its own counsel on that and tells you nothing. You are out. You are not whole. The cold has the truth of it, and the cold does not lie."
+      },
+      {
+        id: "end_daylight_all_three",
+        name: "Daylight, All Three",
+        summary: "Out together, the lamp still burning, the cold beaten by a margin. The whole of the small victory.",
+        priority: 0,
+        conditions: [
+          { field: "cave_all_together", op: "is_true" },
+          { field: "cave_dark_out", op: "is_false" },
+          { field: "cave_hypothermic", op: "is_false" }
+        ],
+        body: "The shaft gives up its grey a hand\u2019s breadth at a time, and then all at once it is not grey but daylight, watery and cold and absolutely real, and you come up out of the black slot in the hillside into the rain and the wind and the enormous ordinary sky.\n\nYou get Rolly up after you, the splint still holding, the ankle a problem for a hospital and not for the cave anymore. The two of you lie in the wet heather and laugh the way people laugh when the laugh is mostly just breathing, and the rain comes down on your faces and it is the best thing either of you has ever felt.\n\nThe lamp is still going. A small thing, but you notice it \u2014 the disc you watched shrink all afternoon, still throwing its useless light up into the daylight, the battery that lasted, the dark that did not get you after all. You turn it off yourself, on your own terms, in the light.\n\nBelow you the cave keeps doing what the cave does \u2014 rising, sealing, dropping, on its own indifferent clock \u2014 and it will go on doing it long after the call-out and the kettle and the long warm telling of this in the club hut. But it did not keep you, and it did not keep Rolly. Not today. You came down to do a routine afternoon, and you are walking off the hill having done a harder one whole."
+      },
+      {
+        id: "end_grey_high",
+        name: "A Grey Way Out",
+        summary: "You surface \u2014 cold, shaken, the cost of it left unspoken. Out, but the cave kept something.",
+        priority: 0,
+        isDefault: true,
+        conditions: [],
+        body: "You climb the last of the shaft on hands going stupid with cold and lungs full of stale cave air, and at the top of it there is grey \u2014 not much grey, the thin worn-out grey of a wet afternoon going toward dark, but grey, and it means sky, and it means out.\n\nYou haul yourself up into the rain and lie a while in the heather, breathing, the black slot of the cave at your back. The lamp still gives its small tired disc, dimmer than it was, the dark beaten by a margin you would rather not measure. You are out. That is the fact you hold onto, because some of the other facts of the afternoon are heavier and you are too cold to lift them yet.\n\nIf there is anyone beside you in the heather, you do not say anything; you just lie there together being out. If there is not, the rain falls on you alone and you let it. The cave behind you neither mourns nor celebrates; it rose and it sealed on its own clock, and now it is quiet, and it will be quiet a long time.\n\nThere will be a phone, and a kettle, and people. Later. For now there is the grey sky and the cold rain and the enormous fact of being out of the dark, and that, for the moment, is enough, and has to be."
+      }
+    ]
+  };
+
+  // src/experiments/sump-line/content/ch2Sump.ts
+  var ch2Sump = {
+    id: "ch2_sump",
+    title: "The Flooded Sump Crawl",
+    startNodeId: "n_s_start",
+    startTime: "14:30",
+    deadline: "15:30",
+    // window 60; longest path 65 (the clock bites: dawdling waits resolve cold)
+    startLocation: "duck_pool",
+    variables: [
+      { name: "companion_status", type: "string", default: "with_you", purpose: "Rolly's carried state: 'with_you' | 'hurt' | 'lost'. Gates the shelter-together beat." },
+      { name: "cave_dark_out", type: "boolean", default: false, purpose: "Latching, paired with lamp at-zero. Required by the dark ending." },
+      { name: "cave_sump_sealed", type: "boolean", default: false, purpose: "Latching: the easy crossing window is gone (sealed). Required by the behind-the-sump ending; gates the dive choices." },
+      { name: "cave_crossed", type: "boolean", default: false, purpose: "Latching: you pulled through the crawl to the far rift. Set only at n_dive; gates the grey crossing-success ending so the waiting node cannot claim it." }
+    ],
+    locations: [
+      { id: "duck_pool", name: "The Duck Pool" },
+      { id: "flooded_crawl", name: "The Flooded Crawl" },
+      { id: "gravel_chamber", name: "The Gravel Chamber" },
+      { id: "exit_rift", name: "The Far Exit Rift" }
+    ],
+    resources: [
+      { id: "lamp_charge", label: "Lamp", min: 0, max: 100, start: 60, depletion: { everyMinutes: 12, amount: 5 }, atZero: { ending: "end_dark_sump", setFlag: "cave_dark_out" } },
+      // standalone start 60; the container rebases to the carried value
+      { id: "body_heat", label: "Warmth", min: 0, max: 100, start: 100, depletion: { everyMinutes: 15, amount: 5 } },
+      { id: "air_gulps", label: "Air", min: 0, max: 3, start: 3 }
+    ],
+    events: [
+      {
+        id: "ev_water_drops",
+        title: "The Water Drops",
+        trigger: [{ field: "time", op: "time_after", value: "14:40" }],
+        eventLocation: "flooded_crawl",
+        ifPresentNode: "n_drop_present",
+        ifAbsentEffects: [
+          { field: "cave_sump_sealed", op: "set", value: "true" },
+          { field: "clues", op: "add_clue", value: "clue_missed_window" }
+        ],
+        recoveryNodeId: "n_gravel_hub"
+      }
+    ],
+    nodes: [
+      {
+        id: "n_s_start",
+        title: "The Duck Pool",
+        type: "scene",
+        location: "duck_pool",
+        entryEffects: [{ field: "location", op: "change_location", value: "duck_pool" }],
+        body: "Down below the choke the world is water to your chest and the cold is a thing with hands.\n\nYou are in the duck pool, black water moving slow against you, the sealing sump somewhere at your back and the only way on a drowned one. Your lamp lays its disc on the surface and the surface will not hold it still \u2014 light shivers and breaks and shivers, and below the broken light there is nothing but more black water and the grit it carries.\n\nIt is {{time}}. Down here that is only a feeling \u2014 the afternoon going somewhere up above, on the hill, where there is sky. The wet pulls the warmth out of you far faster than the dry ever could; you can already feel the shiver starting low in your back, the kind you cannot decide to stop. Each breath you take is a thing you are spending.\n\nThe far exit is through the water, found by dive, when and if the flood lets you. You can push straight to the crawl and be at the airspace if the water drops, or climb out into the gravel chamber first and try to get some air and sense back into yourself.",
+        choices: [
+          { id: "c_to_crawl", label: "Push straight to the flooded crawl.", destination: "n_crawl", effects: [{ field: "time", op: "add_minutes", value: "15" }, { field: "air_gulps", op: "decrement", value: "1" }] },
+          { id: "c_to_gravel", label: "Climb out into the gravel chamber first.", destination: "n_gravel_hub", effects: [{ field: "time", op: "add_minutes", value: "10" }] }
+        ]
+      },
+      {
+        id: "n_crawl",
+        title: "The Flooded Crawl",
+        type: "event",
+        location: "flooded_crawl",
+        entryEffects: [{ field: "location", op: "change_location", value: "flooded_crawl" }],
+        body: "The flooded crawl is a drowned slot under the seal, a thread of foul airspace at its roof where the water has not quite reached the rock. You wedge in cheek to the cold ceiling and breathe the little air the cave allows you and taste grit and iron and cold.\n\nThe way through is a dive \u2014 down, along, up into whatever is on the far side \u2014 and you cannot make it while the water is this high. You can wait here at the airspace for the flood to drop and give you the gap, or, if you have the breath and the nerve for it, go now into the black and find the far side by feel.",
+        choices: [
+          { id: "c_wait", label: "Wait at the airspace for the water to drop.", destination: "n_gravel_hub", effects: [{ field: "time", op: "add_minutes", value: "15" }] },
+          { id: "c_crawl_dive", label: "Dive the crawl now, into the black.", destination: "n_dive", conditions: [{ field: "cave_sump_sealed", op: "is_false" }, { field: "air_gulps", op: "gte", value: "1" }], effects: [{ field: "time", op: "add_minutes", value: "10" }, { field: "air_gulps", op: "decrement", value: "1" }] }
+        ]
+      },
+      {
+        id: "n_drop_present",
+        title: "The Water Drops",
+        type: "event",
+        location: "flooded_crawl",
+        entryEffects: [{ field: "location", op: "change_location", value: "flooded_crawl" }],
+        body: "You are wedged at the airspace in the flooded crawl, cheek to the cold roof, breathing the thread of foul air the cave allows you, when the water lets go.\n\nThe roar that has been pressing at your ears recedes. The pulse has passed somewhere up the system, and here, now, the level drops \u2014 you feel it before you see it, the water sliding down off your chin, off your chest, the airspace at the roof yawning suddenly wide. Where there was a finger\u2019s breadth of breath there is a hand\u2019s, two hands\u2019, a black gap you could pull yourself through.\n\nA window. The mountain has opened a window \u2014 not for you, it opened because the water that propped it shut has gone elsewhere \u2014 but it has opened, and it will not stay open. The flood is not done. It will come back up and take the gap with it. There is the gap, and the breath in your chest, and the few minutes the cave is lending you. Go now, or the window closes and you are behind the sump.",
+        choices: [
+          { id: "c_drop_dive", label: "Dive the open window \u2014 go now.", destination: "n_dive", conditions: [{ field: "cave_sump_sealed", op: "is_false" }], effects: [{ field: "time", op: "add_minutes", value: "10" }, { field: "air_gulps", op: "decrement", value: "1" }] },
+          { id: "c_drop_back", label: "Lose your nerve \u2014 pull back to the gravel chamber.", destination: "n_gravel_hub", effects: [{ field: "time", op: "add_minutes", value: "10" }] }
+        ]
+      },
+      {
+        id: "n_gravel_hub",
+        title: "The Gravel Chamber",
+        type: "transition",
+        location: "gravel_chamber",
+        entryEffects: [{ field: "location", op: "change_location", value: "gravel_chamber" }],
+        body: "The gravel chamber is a bank of wet shingle above the flood, a pocket of close stale air the cave has left you. It is out of the worst of the water, and that is all that can be said for it. The cold is deep in your joints; the shiver will not stop; your hands have gone clumsy and slow.\n\nYour lamp gives its small dim disc, the dark sitting patient just past the gravel. Below you the flooded crawl waits, and the seal, and the far rift somewhere beyond the water. There is a hard way through and a waiting way, and the difference between them is breath and nerve and whether the flood gives you the gap.",
+        choices: [
+          { id: "c_g_with", label: "Wedge in with Rolly out of the water.", destination: "n_set_together_s", conditions: [{ field: "companion_status", op: "equals", value: "with_you" }], effects: [{ field: "time", op: "add_minutes", value: "15" }] },
+          { id: "c_g_try", label: "Go back down and try the crawl.", destination: "n_crawl", conditions: [{ field: "cave_sump_sealed", op: "is_false" }, { field: "air_gulps", op: "gte", value: "1" }], effects: [{ field: "location", op: "change_location", value: "flooded_crawl" }, { field: "time", op: "add_minutes", value: "10" }] },
+          { id: "c_g_wait", label: "Hunker down and wait it out.", destination: "n_resolve_s", effects: [{ field: "time", op: "add_minutes", value: "20" }] }
+        ]
+      },
+      {
+        id: "n_set_together_s",
+        title: "Two in the Air Bell",
+        type: "scene",
+        location: "gravel_chamber",
+        entryEffects: [{ field: "location", op: "change_location", value: "gravel_chamber" }],
+        body: "You wedge in beside Rolly on the gravel, shoulder to shoulder, sharing what warmth two cold bodies can make in a pocket of dead air. The splint has held. The ankle is a problem for later, if there is a later.\n\nNeither of you says much. There is not much to say that the cold has not already said. You share the air and the waiting and the small tired light, and somewhere past the gravel the water decides what it is going to do with the two of you.",
+        choices: [
+          { id: "c_t_crawl", label: "Make for the crawl together while there\u2019s a chance.", destination: "n_crawl", conditions: [{ field: "cave_sump_sealed", op: "is_false" }, { field: "air_gulps", op: "gte", value: "1" }], effects: [{ field: "location", op: "change_location", value: "flooded_crawl" }, { field: "time", op: "add_minutes", value: "10" }] },
+          { id: "c_t_wait", label: "Wait for rescue together.", destination: "n_resolve_s", effects: [{ field: "time", op: "add_minutes", value: "20" }] }
+        ]
+      },
+      {
+        id: "n_dive",
+        title: "Through the Seal",
+        type: "transition",
+        location: "exit_rift",
+        resolvesEnding: true,
+        entryEffects: [
+          { field: "location", op: "change_location", value: "exit_rift" },
+          { field: "cave_crossed", op: "set", value: "true" }
+        ],
+        body: "You take the breath the cave lets you take and you go down into the black water and pull yourself along the drowned crawl by feel, hand over hand on rock you cannot see, lungs starting to burn.",
+        choices: []
+      },
+      {
+        id: "n_resolve_s",
+        title: "The Long Cold Wait",
+        type: "transition",
+        location: "gravel_chamber",
+        resolvesEnding: true,
+        entryEffects: [{ field: "location", op: "change_location", value: "gravel_chamber" }],
+        body: "In the end there is nothing to do but stop trying to make the crossing happen, and wedge into the gravel, and wait, and let the cold and the dark and the mountain\u2019s slow clock do what they are going to do.",
+        choices: []
+      }
+    ],
+    endings: [
+      {
+        id: "end_dark_sump",
+        name: "The Cave Keeps You",
+        summary: "The lamp died in the water; the dark, which was always going to win, has you under the rock.",
+        priority: 2,
+        conditions: [{ field: "cave_dark_out", op: "is_true" }],
+        body: "The lamp gives out down in the wet dark, and there is no rallying it this time.\n\nIt dims to a coal, to a thread, to a memory of light shivering on black water, and then it is gone, and the dark that was always at the edge of it is simply everywhere, total, with no rim to it at all. You are in the water, or beside it, with the cold all the way into the bone and your hands too stupid now to be sure which.\n\nThe cave does not change. The water moves the way water moves, the rock holds the way rock holds, none of it about you. The dark was always going to win this race; the battery only borrowed the afternoon from it, and now the loan is called, down here where the afternoon never reached.\n\nYou hold the cold rock and listen to your own breath and the slow drip and lap of water that will not tell you anything. Somewhere far above is the {{time}} sky and the hill and the ordinary day you came down out of. The cave is in no hurry. It has held this dark since before there were eyes to be lost in it, and it has you now, and all the time there is."
+      },
+      {
+        id: "end_behind_sump",
+        name: "Behind the Sump",
+        summary: "The window came and went without you; the water rose and the seal shut, and you are on the wrong side of it.",
+        priority: 1,
+        conditions: [{ field: "cave_sump_sealed", op: "is_true" }],
+        body: "The water never gives you the gap, and in the end it stops pretending it might.\n\nThe seal is shut. The crawl is full, roof to floor, the airspace you needed gone under risen water that came back up the way it always comes back up, on its own indifferent clock. The easy way out \u2014 the dropped-water window, the dive through to the far rift \u2014 closed somewhere back there, and you are on this side of it, in the gravel and the dark, with the sump between you and the rest of the cave.\n\nYou are behind the sump. The phrase has a sound to it you have heard in the club hut, on winter nights, in other people\u2019s stories, and you never thought to be inside one. There is air here, for now, a pocket of it in the gravel chamber. There is a little light left. There is the cold, which has all of you it wants and is still taking more.\n\nIf there is anyone beside you in the dark, you share the air and the waiting. If there is not, the waiting is only yours. You knock on the rock \u2014 bang, bang, bang, a pause \u2014 the slow signal, up through a mountain that carries the sound and does not answer, because rock does not answer. Somewhere a call-out will start. The water sealed on its own schedule and offers no opinion on whether it will start in time."
+      },
+      {
+        id: "end_grey_sump",
+        name: "A Grey Way Out",
+        summary: "You pull through the dropped-water window into the far rift and climb out \u2014 cold, shaking, alive.",
+        priority: 0,
+        conditions: [
+          { field: "cave_crossed", op: "is_true" },
+          { field: "cave_dark_out", op: "is_false" }
+        ],
+        body: "You pull along the drowned crawl on the last of the breath in your chest, hand over hand on rock you cannot see, lungs burning, the cold no longer something happening to you but something you are \u2014 and then the rock above your fingers is gone and your face breaks a surface and you are gulping foul wet air in a slot of rising stone on the far side of the seal.\n\nYou made it through. The window held the few seconds you needed and you spent them right. Beyond the crawl the far rift climbs, wet and cold but going up, going out, the water finally at your back instead of over your head.\n\nYou climb the rift on hands that have stopped properly working, and somewhere up it there is grey \u2014 the thin worn grey of a wet afternoon \u2014 and then there is rain on your face and the enormous ordinary sky, and you haul yourself out of the black slot in the hillside and lie in the heather and shake, and the shaking is the warmest thing you have felt in hours.\n\nIf there is anyone beside you, you got them out too, and you do not yet have the breath to say what that is worth. If there is not, you lie alone in the rain and are out, and the cave behind you neither mourns nor celebrates; it sealed and dropped and rose on its own clock, and let you through a gap it never opened for your sake. You are cold and shaking and out, and out is the whole of it, and it is enough."
+      },
+      {
+        id: "end_long_cold_wait",
+        name: "The Long Cold Wait",
+        summary: "The water does not drop in time; you wedge in the gravel, knock on the rock, and wait for a rescue that may or may not come.",
+        priority: 0,
+        isDefault: true,
+        conditions: [],
+        body: "The water does not drop in time, and in the end there is nothing to do but wait.\n\nYou are wedged in the gravel air bell above the flood, the pocket of close stale air the cave has left you, and you have stopped trying to make the crossing happen. The cold is all the way into you now, the deep shiver that comes in waves and then comes constant, your hands too stupid to do much but knock on the rock \u2014 bang, bang, bang, a pause, bang \u2014 the slow signal you were taught, sent up through the mountain to anyone who might be listening.\n\nThe lamp still gives its small disc, dimmer than it was, the dark sitting patient just past the gravel. You turn it down to save what\u2019s left. No sense burning light you\u2019ll want later, if there is a later.\n\nIf there is anyone beside you in the dark, you share the warmth and the waiting and the knocking. If there is not, the knocking is only yours. Either way the rock takes the sound and does not answer, because rock does not answer; it only carries.\n\nIt is {{time}}, or near it; down here the afternoon is a thing happening to other people, up in the light. Somewhere a club will notice you overdue. Somewhere a phone will ring. The call-out may come in time and may not, and the cave, which rose and sealed and dropped on its own indifferent clock, offers no opinion on the matter. You breathe. You knock. You wait in the cold for a rescue that may or may not come."
+      }
+    ]
+  };
+
+  // src/experiments/sump-line/content/sumpLine.ts
+  var sumpLine = {
+    id: "sump_line",
+    title: "The Sump Line",
+    startChapterId: "ch1_descent",
+    carry: { vars: "all", resources: ["lamp_charge", "body_heat"], clues: true, inventory: true },
+    gameDeadlineMinutes: 360,
+    chapters: [
+      {
+        id: "ch1_descent",
+        title: "The Pulse",
+        story: ch1Descent,
+        transitions: [
+          { when: { conditions: [{ field: "cave_route", op: "equals", value: "high" }] }, goTo: "ch2_high" },
+          { when: {}, goTo: "ch2_sump" }
+        ]
+      },
+      { id: "ch2_high", title: "The Dry High Traverse", story: ch2High, gameEnding: true, transitions: [] },
+      { id: "ch2_sump", title: "The Flooded Sump Crawl", story: ch2Sump, gameEnding: true, transitions: [] }
+    ]
+  };
+
+  // src/experiments/sump-line/play/main.ts
+  function substituteTime(text, timeLabel) {
+    return text.replace(/\{\{time\}\}/g, timeLabel);
+  }
+  function paragraphs(body, timeLabel) {
+    return substituteTime(body, timeLabel).split("\n\n").map((p) => `<p>${escapeHtml(p)}</p>`).join("");
+  }
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function meter(label, value, max) {
+    const v = Math.max(0, Math.min(max, Number(value)));
+    const pct = Math.round(v / max * 100);
+    const low = pct <= 25 ? " low" : "";
+    return `<div class="meter${low}"><span class="meter-label">${label}</span><span class="meter-track"><span class="meter-fill" style="width:${pct}%"></span></span></div>`;
+  }
+  function renderView(view) {
+    var _a;
+    if (view.gameOver && view.endingReached) {
+      const e = view.endingReached;
+      return `
+      <div class="ending">
+        <div class="ending-kicker">\u2014 an ending \u2014</div>
+        <h1 class="ending-name">${escapeHtml(e.name)}</h1>
+        <div class="prose">${paragraphs((_a = e.body) != null ? _a : e.summary, view.timeLabel)}</div>
+        <button class="restart" data-restart="1">Climb back in</button>
+      </div>`;
+    }
+    const lamp = view.state.vars.lamp_charge;
+    const heat = view.state.vars.body_heat;
+    const choices = view.choices.filter((c) => c.available).map((c) => `<button class="choice" data-choice="${c.id}">${escapeHtml(c.label)}</button>`).join("");
+    return `
+    <div class="status">
+      <span class="chapter">${escapeHtml(view.chapterTitle)}</span>
+      <span class="clock">${escapeHtml(view.timeLabel)}</span>
+    </div>
+    <div class="meters">${meter("Lamp", lamp, 100)}${meter("Warmth", heat, 100)}</div>
+    <div class="scene">
+      <h2 class="node-title">${escapeHtml(view.node.title)}</h2>
+      <div class="prose">${paragraphs(view.node.body, view.timeLabel)}</div>
+    </div>
+    <div class="choices">${choices}</div>`;
+  }
+  function mount(root) {
+    let runner = new GameRunner(sumpLine);
+    const draw = () => {
+      root.innerHTML = renderView(runner.view());
+      root.querySelectorAll("[data-choice]").forEach(
+        (b) => b.addEventListener("click", () => {
+          runner.choose(b.dataset.choice);
+          draw();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        })
+      );
+      const restart = root.querySelector("[data-restart]");
+      if (restart) restart.addEventListener("click", () => {
+        runner = new GameRunner(sumpLine);
+        draw();
+      });
+    };
+    draw();
+  }
+  if (typeof document !== "undefined") {
+    const el = document.getElementById("app");
+    if (el) mount(el);
+  }
+})();
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@ import { lintStory } from '../../engine';
 import { exampleGame } from './exampleGame';
 
 describe('exampleGame', () => {
-  it('has 3 chapters, a start chapter, and one game-ending chapter', () => {
+  it('has 4 chapters, a start chapter, and one game-ending chapter', () => {
     expect(exampleGame.chapters.length).toBe(4);
     expect(exampleGame.chapters.some((c) => c.id === exampleGame.startChapterId)).toBe(true);
     expect(exampleGame.chapters.filter((c) => c.gameEnding).length).toBe(1);

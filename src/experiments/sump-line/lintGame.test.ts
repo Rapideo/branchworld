@@ -21,6 +21,11 @@ describe('lintGame', () => {
     g.chapters[1].transitions = [{ when: { endingId: 'never' }, goTo: 'ch3' }]; // ch2a no catch-all
     expect(lintGame(g).errors.some((e) => e.code === 'GAME_NO_CATCHALL')).toBe(true);
   });
+  it('does NOT flag GAME_NO_CATCHALL when the only transition has an empty conditions array', () => {
+    const g = clone(exampleGame);
+    g.chapters[1].transitions = [{ when: { conditions: [] }, goTo: 'ch3' }]; // empty conditions = runtime catch-all
+    expect(lintGame(g).errors.some((e) => e.code === 'GAME_NO_CATCHALL')).toBe(false);
+  });
   it('flags a missing start chapter', () => {
     const g = clone(exampleGame);
     g.startChapterId = 'nope';

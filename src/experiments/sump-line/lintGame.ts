@@ -19,7 +19,7 @@ export function lintGame(game: Game): { ok: boolean; errors: LintIssue[]; warnin
       }
     }
     if (!ch.gameEnding) {
-      const hasCatchAll = ch.transitions.some((t) => t.when.endingId === undefined && !t.when.conditions);
+      const hasCatchAll = ch.transitions.some((t) => t.when.endingId === undefined && (!t.when.conditions || t.when.conditions.length === 0));
       if (!hasCatchAll) {
         errors.push({ level: 'error', code: 'GAME_NO_CATCHALL', message: `non-game-ending chapter ${ch.id} has no catch-all transition; some end-state could have no next chapter`, where: ch.id });
       }

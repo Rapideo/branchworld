@@ -2,10 +2,9 @@ import type { Story } from '../../engine';
 import type { Game } from './types';
 
 // Chapter 1: warmth starts at 4 and depletes 1 per 30 min. "slow" burns more warmth than "fast".
-// Deadline 01:30 = 90 min; max path (slow) = 90 min → clock can bite on the slow route.
 const ch1Story: Story = {
   id: 'ex_ch1', title: 'Descent', startNodeId: 'c1_start', startTime: '00:00', deadline: '01:30',
-  startLocation: 'cave', variables: [], locations: [{ id: 'cave', name: 'Cave' }],
+  startLocation: 'L', variables: [], locations: [{ id: 'L', name: 'Cave' }],
   events: [],
   resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 30, amount: 1 } }],
   nodes: [
@@ -18,28 +17,38 @@ const ch1Story: Story = {
   endings: [{ id: 'c1_done', name: 'At the floor', summary: 'down', conditions: [], isDefault: true }],
 };
 
-// Chapter 2: a single passage that branches internally (dry or wet crawl).
-// Deadline 01:00 = 60 min; max path (wet crawl = 60 min) → clock can bite.
-const ch2Story: Story = {
-  id: 'ex_ch2', title: 'The Gallery', startNodeId: 'c2_start', startTime: '00:00', deadline: '01:00',
-  startLocation: 'gallery', variables: [], locations: [{ id: 'gallery', name: 'Gallery' }], events: [],
+// Chapter 2a (warm route) and 2b (cold route) both reconverge on chapter 3.
+const ch2aStory: Story = {
+  id: 'ex_ch2a', title: 'The Dry Gallery', startNodeId: 'c2a_start', startTime: '00:00', deadline: '00:30',
+  startLocation: 'L', variables: [], locations: [{ id: 'L', name: 'Cave' }], events: [],
   resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 30, amount: 1 } }],
   nodes: [
-    { id: 'c2_start', title: 'The Fork', body: 'Two passages lead onward.', choices: [
-      { id: 'dry', label: 'Take the dry gallery', destination: 'c2_end', effects: [{ field: 'time', op: 'add_minutes', value: '30' }] },
-      { id: 'wet', label: 'Take the wet crawl', destination: 'c2_end', effects: [{ field: 'time', op: 'add_minutes', value: '60' }] },
+    { id: 'c2a_start', title: 'Dry Gallery', body: 'A dry passage, mercifully.', choices: [
+      { id: 'on', label: 'Press on', destination: 'c2a_end', effects: [{ field: 'time', op: 'add_minutes', value: '30' }] },
     ] },
-    { id: 'c2_end', title: 'Onward', body: 'The gallery narrows toward a shaft.', resolvesEnding: true, choices: [] },
+    { id: 'c2a_end', title: 'Onward', body: 'The gallery narrows.', resolvesEnding: true, choices: [] },
   ],
-  endings: [{ id: 'c2_done', name: 'Through the gallery', summary: 'on', conditions: [], isDefault: true }],
+  endings: [{ id: 'c2a_done', name: 'Through the gallery', summary: 'on', conditions: [], isDefault: true }],
 };
 
-// Chapter 3: game ending. "warmth gt 0" → survived; default → frozen.
-// Deadline 00:20 = 20 min; only path = 20 min → clock can bite.
+const ch2bStory: Story = {
+  id: 'ex_ch2b', title: 'The Wet Crawl', startNodeId: 'c2b_start', startTime: '00:00', deadline: '00:40',
+  startLocation: 'L', variables: [], locations: [{ id: 'L', name: 'Cave' }], events: [],
+  resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 20, amount: 1 } }],
+  nodes: [
+    { id: 'c2b_start', title: 'Wet Crawl', body: 'Frigid water soaks you through.', choices: [
+      { id: 'on', label: 'Crawl on', destination: 'c2b_end', effects: [{ field: 'time', op: 'add_minutes', value: '40' }] },
+    ] },
+    { id: 'c2b_end', title: 'Onward', body: 'You emerge, shaking.', resolvesEnding: true, choices: [] },
+  ],
+  endings: [{ id: 'c2b_done', name: 'Through the crawl', summary: 'on', conditions: [], isDefault: true }],
+};
+
+// Chapter 3: game ending. "warmth gt 0" -> survived; default -> frozen.
 const ch3Story: Story = {
   id: 'ex_ch3', title: 'The Last Climb', startNodeId: 'c3_start', startTime: '00:00', deadline: '00:20',
-  startLocation: 'shaft', variables: [{ name: 'frozen_flag', type: 'boolean', default: false, purpose: 'reached zero warmth' }],
-  locations: [{ id: 'shaft', name: 'Shaft' }], events: [],
+  startLocation: 'L', variables: [{ name: 'frozen_flag', type: 'boolean', default: false, purpose: 'reached zero warmth' }],
+  locations: [{ id: 'L', name: 'Cave' }], events: [],
   resources: [{ id: 'warmth', label: 'Warmth', min: 0, max: 4, start: 4, depletion: { everyMinutes: 30, amount: 1 }, atZero: { setFlag: 'frozen_flag' } }],
   nodes: [
     { id: 'c3_start', title: 'The Shaft', body: 'Daylight, far above.', choices: [
@@ -59,10 +68,11 @@ export const exampleGame: Game = {
   gameDeadlineMinutes: 600,
   chapters: [
     { id: 'ch1', title: 'Descent', story: ch1Story, transitions: [
-      { when: { conditions: [{ field: 'warmth', op: 'lte', value: '2' }] }, goTo: 'ch2' },
-      { when: {}, goTo: 'ch2' },
+      { when: { conditions: [{ field: 'warmth', op: 'lte', value: '2' }] }, goTo: 'ch2b' },
+      { when: {}, goTo: 'ch2a' },
     ] },
-    { id: 'ch2', title: 'The Gallery', story: ch2Story, transitions: [{ when: {}, goTo: 'ch3' }] },
+    { id: 'ch2a', title: 'Dry Gallery', story: ch2aStory, transitions: [{ when: {}, goTo: 'ch3' }] },
+    { id: 'ch2b', title: 'Wet Crawl', story: ch2bStory, transitions: [{ when: {}, goTo: 'ch3' }] },
     { id: 'ch3', title: 'Last Climb', story: ch3Story, gameEnding: true, transitions: [] },
   ],
 };

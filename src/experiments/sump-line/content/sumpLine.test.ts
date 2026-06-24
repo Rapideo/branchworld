@@ -39,8 +39,9 @@ describe('The Sump Line — the wired game', () => {
     // ch1 sump fork: push on without carrying, water high, commit to the water
     ['c_gear_in', 'c_descend', 'c_streamway', 'c_press', 'c_to_rolly', 'c_push', 'c_to_choke', 'c_godown'].forEach((c) => g.choose(c));
     expect(g.view().chapterId).toBe('ch2_sump');
-    g.choose('c_to_crawl');      // present: the window
-    const v = g.choose('c_drop_dive');
+    // ch2_sump: push to the crawl, catch the dropped-water window, dive through to the far rift
+    ['c_to_crawl', 'c_duck_on', 'c_deep_on', 'c_drop_dive', 'c_dive_on'].forEach((c) => g.choose(c));
+    const v = g.choose('c_far_on');
     expect(v.gameOver).toBe(true);
     expect(v.finalEndingId).toBe('end_grey_sump');
   });

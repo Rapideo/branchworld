@@ -17,7 +17,7 @@ describe('play harness (pure render helpers over the real GameRunner)', () => {
 
   it('renders an ending screen at game over', () => {
     const g = new GameRunner(sumpLine);
-    ['c_gear_in', 'c_descend', 'c_streamway', 'c_press', 'c_to_rolly', 'c_push', 'c_to_choke', 'c_godown', 'c_to_crawl', 'c_drop_dive'].forEach((c) => g.choose(c));
+    ['c_gear_in', 'c_descend', 'c_streamway', 'c_press', 'c_to_rolly', 'c_push', 'c_to_choke', 'c_godown', 'c_to_crawl', 'c_duck_on', 'c_deep_on', 'c_drop_dive', 'c_dive_on', 'c_far_on'].forEach((c) => g.choose(c));
     const html = renderView(g.view());
     expect(html).toContain('an ending');
     expect(html).toContain('A Grey Way Out');

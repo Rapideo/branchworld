@@ -2,15 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { lintGame, GameRunner } from '..';
 import { sumpLine } from './sumpLine';
 
-// Drive ch1 to the high fork, carrying Rolly the whole way (sets cave_all_together).
+// Drive the expanded ch1 to the high fork, carrying Rolly the whole way (sets cave_all_together).
 function ch1HighWithRolly(g: GameRunner) {
-  g.choose('c_down');
-  g.choose('c_to_rolly');
-  g.choose('c_stabilise'); // splint + carry -> companion_status with_you
-  g.choose('c_carry_on');
-  g.choose('c_scout_high');
-  g.choose('c_lead_up');    // cave_all_together -> true
-  g.choose('c_on_high');    // -> resolves ch1_to_high -> transitions to ch2_high
+  // spine: descend -> streamway -> the pulse -> splint & carry -> the choke -> scout high -> over the top
+  ['c_gear_in', 'c_descend', 'c_streamway', 'c_press', 'c_to_rolly', 'c_stabilise', 'c_carry_on', 'c_to_choke', 'c_scout_high', 'c_lead_up', 'c_on_high'].forEach((c) => g.choose(c));
 }
 
 describe('The Sump Line — the wired game', () => {
@@ -41,10 +36,8 @@ describe('The Sump Line — the wired game', () => {
 
   it('the SUMP route, catching the dropped-water window -> "A Grey Way Out"', () => {
     const g = new GameRunner(sumpLine);
-    g.choose('c_down');
-    g.choose('c_to_rolly');
-    g.choose('c_push');          // no carry; flood rises -> sump fork
-    g.choose('c_godown');        // -> ch1_to_sump -> transitions to ch2_sump
+    // ch1 sump fork: push on without carrying, water high, commit to the water
+    ['c_gear_in', 'c_descend', 'c_streamway', 'c_press', 'c_to_rolly', 'c_push', 'c_to_choke', 'c_godown'].forEach((c) => g.choose(c));
     expect(g.view().chapterId).toBe('ch2_sump');
     g.choose('c_to_crawl');      // present: the window
     const v = g.choose('c_drop_dive');
@@ -54,7 +47,7 @@ describe('The Sump Line — the wired game', () => {
 
   it('a lamp run low across both chapters dies in the dark -> "The Cave Keeps You" (cross-chapter only)', () => {
     const g = new GameRunner(sumpLine);
-    ch1HighWithRolly(g);         // slow carry route burns the lamp down to ~25 entering ch2
+    ch1HighWithRolly(g);         // the long carry route burns the lamp down to ~30 entering ch2
     g.choose('c_rig');           // slow rig: caught at the oxbow (present)
     g.choose('c_cross_fast');    // -> n_lose_here
     g.choose('c_on_crystal');

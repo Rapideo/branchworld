@@ -10,14 +10,14 @@ describe('play harness (pure render helpers over the real GameRunner)', () => {
   it('renders the opening scene with choices and no leftover {{time}} token', () => {
     const html = renderView(new GameRunner(sumpLine).start());
     expect(html).toContain('The Pulse');            // chapter title in the status strip
-    expect(html).toContain('data-choice="c_down"'); // an available choice
+    expect(html).toContain('data-choice="c_gear_in"'); // an available choice
     expect(html).toContain('Lamp');                 // the survival meter
     expect(html).not.toContain('{{time}}');         // token substituted to the clock label
   });
 
   it('renders an ending screen at game over', () => {
     const g = new GameRunner(sumpLine);
-    ['c_down', 'c_to_rolly', 'c_push', 'c_godown', 'c_to_crawl', 'c_drop_dive'].forEach((c) => g.choose(c));
+    ['c_gear_in', 'c_descend', 'c_streamway', 'c_press', 'c_to_rolly', 'c_push', 'c_to_choke', 'c_godown', 'c_to_crawl', 'c_drop_dive'].forEach((c) => g.choose(c));
     const html = renderView(g.view());
     expect(html).toContain('an ending');
     expect(html).toContain('A Grey Way Out');

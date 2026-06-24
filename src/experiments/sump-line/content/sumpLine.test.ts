@@ -27,9 +27,9 @@ describe('The Sump Line — the wired game', () => {
   it('the HIGH route, kept together, lamp surviving -> "Daylight, All Three" (a carry-only ending)', () => {
     const g = new GameRunner(sumpLine);
     ch1HighWithRolly(g);
-    g.choose('c_freeclimb');     // fast: cross ahead of the pulse (absent)
-    g.choose('c_cross');
-    const v = g.choose('c_freeclimb_shaft');
+    // ch2 fast, efficient: free-climb, cross ahead of the pulse, free-climb the shaft — the lamp just survives
+    ['c_freeclimb', 'c_aven_on', 'c_pitch_on', 'c_to_oxbow', 'c_cross', 'c_to_crystal', 'c_traverse_on', 'c_freeclimb_shaft'].forEach((c) => g.choose(c));
+    const v = g.choose('c_climb_last');
     expect(v.gameOver).toBe(true);
     expect(v.finalEndingId).toBe('end_daylight_all_three');
   });
@@ -48,10 +48,9 @@ describe('The Sump Line — the wired game', () => {
   it('a lamp run low across both chapters dies in the dark -> "The Cave Keeps You" (cross-chapter only)', () => {
     const g = new GameRunner(sumpLine);
     ch1HighWithRolly(g);         // the long carry route burns the lamp down to ~30 entering ch2
-    g.choose('c_rig');           // slow rig: caught at the oxbow (present)
-    g.choose('c_cross_fast');    // -> n_lose_here
-    g.choose('c_on_crystal');
-    const v = g.choose('c_rig_shaft'); // the long shaft rig pushes the lamp past zero mid-climb
+    // ch2 slow & long: rig, caught at the oxbow, cross alone, rig the shaft — the lamp runs to zero mid-climb
+    ['c_rig', 'c_aven_on', 'c_pitch_on', 'c_to_oxbow', 'c_cross_fast', 'c_on_after', 'c_to_crystal', 'c_traverse_on', 'c_rig_shaft'].forEach((c) => g.choose(c));
+    const v = g.choose('c_climb_last');
     expect(v.gameOver).toBe(true);
     expect(v.finalEndingId).toBe('end_dark_high');
     expect(v.state.vars.cave_dark_out).toBe(true);

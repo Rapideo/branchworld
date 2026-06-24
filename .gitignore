@@ -5,3 +5,6 @@ coverage/
 
 # Netlify CLI local state (links this folder to the deployed site)
 .netlify/
+
+# Agent working directory (Claude Code)
+.claude/

@@ -22,14 +22,24 @@
   sound; the risks are silent cross-chapter state, ending-honesty seams, and verification at book
   scale* — none fatal, all now specified.
 
-## The one decision in front of us
+## Decided priority (set together 2026-06-24)
 
-**Do we open v1.4 now, or push the consumer POC book further on frozen v1.3 first?** The hardening
-pass deliberately informs exactly this. My recommendation, reflected below: **a thin v1.4 "safety"
-slice first** (the two cheapest, highest-leverage guards — H1 contract linter + H2 negative-time
-lint), because they protect every chapter we write *next*; then build the book; then the richer
-v1.4 tooling as the book demands it. But the felt-quality and content fixes need **no un-freeze**
-and can run in parallel regardless.
+Three calls, locked:
+
+1. **First sprint = the safety slice, NO un-freeze.** Build the **contract + latch linter (A1/E1)**
+   in the *container layer* (next to `lintGame`, not `src/engine/`) + **fix the four player
+   incoherences (B1)** in the chapter files + keep the fuzzer (F1) in CI. This catches the
+   book-killer silent-drift class and protects every future chapter *while the engine stays frozen*.
+   (Key realization: A1 is a Game-level concern, so it needs no un-freeze — only the deeper
+   ending-honesty/offset work does.)
+2. **Book world = chosen after tooling.** Don't lock the cave-vs-new-setting question yet; harden +
+   tool first, pick the arc when we're ready to author at length.
+3. **Per-project toggles (WS-D) = deferred** until a second project actually needs a different
+   primitive set — no speculative abstraction now.
+
+The deeper v1.4 engine changes (A2 negative-time lint, A3 node-named endings, A6 offset, A7 walker
+bucketing) are **not** in Sprint 1 — we open v1.4 deliberately, after the safety slice, when the book
+demands it. `E3` (graph editor) is parked as premature for the POC stage.
 
 ## Workstreams
 
@@ -81,6 +91,18 @@ for the project at hand (resources, scheduled events, multi-chapter carry, etc.)
 | E2 | The **seeded walker** + value-at-endings report (same as A4). | M–L | P1 |
 | E3 | **Graph + variable-panel editor** — the human-facing surface (Twine/articy-shaped) for the eventual creator product. | L | P3 |
 
+### WS-G — Front-end: a native-mobile video-game experience
+*Goal (Matthew, 2026-06-24): make the player a **native-mobile-feeling video game**, not a text page —
+**images for locations and characters**, plus other rich presentation elements. **Sequenced AFTER initial
+game design** (the engine/content/safety work below comes first); this is the presentation layer over the
+proven `GameRunner`.*
+
+| Item | What | Size | Proposed priority |
+|---|---|---|---|
+| G1 | **Design spike** — define the mobile UX: scene/location art + character portraits, meter HUD (the loved Warmth/Light trackers), choice presentation, transitions, art pipeline (where images come from — generated vs commissioned), and how art keys off engine state (location id, companion status, time-of-day, survival meters). | M | P2 (after game design) |
+| G2 | **Build the mobile front-end** over the real `GameRunner` (the current `sump-line.html` is the logic-proven seed; this replaces its presentation with an app-grade, image-rich, touch-first UI). | L | P2→P3 |
+| G3 | **Art asset system** — per-location and per-character image slots driven by `Story`/state, with sensible fallbacks; likely a small per-project asset manifest (pairs naturally with WS-D toggles). | M | P3 |
+
 ### WS-F — A standing testing squad
 *Goal: institutionalize this pass so hardening is repeatable, not one-off.*
 
@@ -89,18 +111,25 @@ for the project at hand (resources, scheduled events, multi-chapter carry, etc.)
 | F1 | Keep `harden/fuzz.test.ts` in CI; grow probes as new findings arrive (the executable-proof habit). | done + ongoing | **P0** (keep) |
 | F2 | A re-runnable "team panel" prompt set (the four lenses) to re-review each new chapter/engine change. | S | P2 |
 
-## Recommended sequencing (to confirm together)
+## Locked sequencing
 
-1. **Now, in parallel:** B1 (fix the slice's incoherences) + A2 (negative-time lint) — both cheap,
-   both correctness. Keep F1 (fuzzer) in CI.
-2. **Then the safety slice:** A1/E1 (contract linter) — the one change that unblocks safe book scale.
-3. **Then:** A3 (node-named endings — fixes both honesty seams) + B2/B3 (the felt-quality method work).
-4. **Then the book:** C1 (arc design) → C2 (author), riding A4/E2 (seeded walker + calibration report)
-   as the chapter count grows. D1 (toggles) slots in when a second project needs a different primitive set.
+- **Sprint 1 — Safety slice (no un-freeze, NOW):**
+  `A1`/`E1` cross-chapter **contract + latch linter** (container layer) · `B1` fix the **four player
+  incoherences** (chapter files) · `F1` fuzzer stays in CI. *Exit: book-scale is drift-safe, freeze intact.*
+- **Sprint 2 — Verification + honesty (as the book demands):**
+  `A4`/`E2` **seeded walker + value-at-endings report** (built container-side first) → then the first
+  *deliberate* v1.4 engine opening: `A2` negative-time lint + `A3` node-named endings (closes both
+  honesty seams). `A5` event hygiene rides along.
+- **Sprint 3 — The book:**
+  `C1` arc design **+ pick the world** (cave-as-full-book vs new setting — deferred to here) → `C2`
+  author, riding the safety stack · `B2`/`B3`/`B4` craft/method work alongside the prose.
+- **Deferred / on-demand:** `WS-D` toggles (until a 2nd project needs a different primitive set) ·
+  `A6` resource offset, `A7` walker bucketing (pull when they bite) · `E3` graph editor (parked —
+  premature for POC) · `F2` re-runnable team panel (nice-to-have).
 
-## Open questions for the walk-through
+## Decisions made (2026-06-24)
 
-- **v1.4 now vs. more book on v1.3 first?** (My rec: thin safety slice — A1 + A2 — now.)
-- **Book arc**: stay in the cave (the Sump Line as a full book) or a new setting for the POC?
-- **Toggles (WS-D)**: design-spike now, or defer until a second project actually needs it?
-- Anything here you'd cut as "too much" for the POC stage?
+- **v1.4 now vs. book-first?** → **Safety slice first, no un-freeze** (A1 container-side + B1), *then* book.
+- **Book world?** → **Decide after tooling** (cave vs new setting chosen when we author at length).
+- **Toggles (WS-D)?** → **Defer** until a second project needs it.
+- **Cut as "too much"?** → `E3` (graph editor) parked for the POC stage.

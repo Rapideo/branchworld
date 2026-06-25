@@ -1,6 +1,7 @@
 import { lintStory } from '../../engine';
 import type { LintIssue } from '../../engine';
 import type { Game } from './types';
+import { lintGameContracts } from './lintGameContracts';
 
 export function lintGame(game: Game): { ok: boolean; errors: LintIssue[]; warnings: LintIssue[] } {
   const errors: LintIssue[] = [];
@@ -53,6 +54,11 @@ export function lintGame(game: Game): { ok: boolean; errors: LintIssue[]; warnin
       }
     }
   }
+
+  // A1 — cross-chapter contract + latch checks (the variable handshake per-chapter lint can't see)
+  const contracts = lintGameContracts(game);
+  errors.push(...contracts.errors);
+  warnings.push(...contracts.warnings);
 
   return { ok: errors.length === 0, errors, warnings };
 }

@@ -3,6 +3,7 @@ export * from './carry';
 export * from './transitions';
 export * from './GameRunner';
 export * from './lintGame';
+export * from './lintGameContracts';
 export { exampleGame } from './exampleGame';
 export { sumpLine } from './content/sumpLine';
 export { ch1Descent } from './content/ch1Descent';

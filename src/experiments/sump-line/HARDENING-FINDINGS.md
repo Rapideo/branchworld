@@ -7,6 +7,19 @@
 > changes); everything here is a **finding**, not a fix. It extends the F1–F9 log in
 > `ENGINE-ASSESSMENT.md`.
 
+## Status (updated 2026-06-24) — what's addressed so far
+
+| Finding(s) | Status | How |
+|---|---|---|
+| **H1, H13** (silent cross-chapter drift; latch discipline) | **Addressed (v1)** | A1 contract+latch linter (`lintGameContracts.ts`, commit `0c1558d`) — `CONTRACT_TYPE_MISMATCH`, `CONTRACT_READ_NO_PRODUCER`, `CONTRACT_DOMAIN_DRIFT`, `LATCH_IN_CHOICE_EFFECT`. *Ancestor-aware `READ_NO_ANCESTOR_PRODUCER` + mutex-latch groups = A1 v1.1 (pending).* |
+| **H6, H7** (+ the F-C/F-E content incoherences) | **Fixed** | B1 (commit `7402474`), validated CLOSED by two team agents. |
+| **F4, F7** (carry-only endings unverifiable; resource calibration by hand) | **Addressed (core)** | A4 seeded walker + value-at-endings (`seededWalk.ts`, commit `74cf36d`). |
+| **H2** (negative-time exploit) | **Open** — deliberate v1.4 | A2 `NEGATIVE_TIME_DELTA` lint (engine change). |
+| **H3, H4, H5** (atZero short-circuit; deadline voids choice; default-ending hedge) | **Open** — deliberate v1.4 | A3 node-named endings (engine change). |
+| **H8, H10, H11, H12** (present/per-branch reachability; cap driver; calibration coupling) | **Partly open** | A4 covers F4/F7; present/per-branch reachability + bucketing still to add. |
+| **H9** (walker must scale) | **Demonstrated in practice** | ch1 exhaustive walk is ~53k states (>50k default); raised that test's cap. Seeded walk (A4) is the first half; a scalable/bucketed walk (A7) is the rest. |
+| **H14–H16** (craft: earning detours, false choices, rhythm) | **Open** — no un-freeze | WS-B method/craft work. |
+
 ## What Track A established (the engine is robust where it counts)
 
 A seeded generator emits random **lint-clean** Stories; the runtime is then walked and asserted

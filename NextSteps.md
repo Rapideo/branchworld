@@ -9,10 +9,29 @@
 > (the team + fuzzer pass) and [`ENGINE-ASSESSMENT.md`](src/experiments/sump-line/ENGINE-ASSESSMENT.md)
 > (the F1–F9 log). The authoring method is in [`docs/authoring-method.md`](docs/authoring-method.md).
 
+## Status — end of 2026-06-24 session (resume anchor)
+
+**DONE this session** (all container-side / content; engine FROZEN throughout; **232 tests green**):
+- ✅ **Hardening pass** — fuzzer + 4 team lenses → `HARDENING-FINDINGS.md` (H1–H16) + `harden/fuzz.test.ts`.
+- ✅ **Priority walk-through** — decisions below; front-end captured as WS-G.
+- ✅ **B1** — the four player incoherences fixed (commit `7402474`); **validated CLOSED by two team agents**.
+- ✅ **A1 v1** — cross-chapter contract + latch linter (`lintGameContracts.ts`, commit `0c1558d`); 4 zero-FP
+  checks merged into `lintGame`; design in `docs/a1-contract-linter-design.md`.
+- ✅ **A4/E2** — seeded walker + value-at-endings report (`seededWalk.ts`, commit `74cf36d`); closes F4 + F7.
+- ✅ **F1** — fuzzer in CI.
+
+**NEXT (resume here), by risk:**
+- *Low-risk, container-side:* **A1 v1.1** — ancestor-aware `READ_NO_ANCESTOR_PRODUCER` (the precise
+  rename-catcher v1 misses) + opt-in `carriedRequired`/`domain` annotations + `MUTEX_LATCH` groups.
+  **Needs careful design — false-positive risk; do NOT rush it.** Plus a small ledger-printer for authoring.
+- *Deliberate v1.4 un-freeze (Matthew's call):* **A2** negative-time lint, **A3** node-named endings (closes
+  both honesty seams H3/H5), then A5/A6/A7.
+- *Then the book:* **C1** arc design + pick the world.
+
 ## Where we are
 
 - **Engine** v1.3, **frozen** and proven robust: a 3,000-story fuzz sweep found zero crashes, zero
-  out-of-bounds, deterministic replay, faithful snapshot/restore. 219 tests green.
+  out-of-bounds, deterministic replay, faithful snapshot/restore. **232 tests green** (was 209 at session start).
 - **Content**: "The Sump Line" plays end-to-end — ch1 (~26 beats) → ch2_high (~19) **or** ch2_sump
   (~16), an evening per playthrough. Double-clickable `sump-line.html` in play and well-received.
 - **Method**: the Branch-and-Bottleneck Authoring method is codified *and* proven by application
@@ -48,10 +67,10 @@ demands it. `E3` (graph editor) is parked as premature for the POC stage.
 
 | Item | What | Size | Proposed priority |
 |---|---|---|---|
-| A1 | **Cross-chapter contract + latch linter** — machine-check that every carried field a downstream chapter reads has an upstream writer of matching name/type/domain; lint latch discipline. Kills the silent-drift class (H1, H13). | M | **P0** |
+| A1 | **Cross-chapter contract + latch linter** — machine-check that every carried field a downstream chapter reads has an upstream writer of matching name/type/domain; lint latch discipline. Kills the silent-drift class (H1, H13). | M | **✅ v1 DONE** (`0c1558d`); v1.1 ancestor-aware next |
 | A2 | **`NEGATIVE_TIME_DELTA` lint + "time is monotonic" invariant** — one-line guard closing the rewind exploit (H2). | S | **P0** |
 | A3 | **Node-named endings (F8)** + teach the overlap lint about `atZero` endings + a distinct "out of time" ending — fixes the two honesty seams (H3, H4, H5). | M | P1 |
-| A4 | **Seeded / scalable walker** (fed by A1's carried-in bands) + present-reachability + per-branch reachability + **value-at-endings report** — the book-scale verification + calibration tools (H8, H9, H11, H12; F4/F5/F7). | M–L | P1 |
+| A4 | **Seeded / scalable walker** + **value-at-endings report** — book-scale verification + calibration (F4/F7 done). Present-reachability + per-branch reachability (H8/H12) still to add. | M–L | **✅ core DONE** (`74cf36d`); H8/H12 next |
 | A5 | **Event hygiene** — lint "no non-event choice may target an `ifPresentNode`"; conditional event triggers (H6, H7). | S–M | P1 |
 | A6 | **Time-driven resource offset (F6)** — safe "rest / swap the battery" mechanic, now doubly motivated by H2. | M | P2 |
 | A7 | **Walker time-bucketing mode** + doc correction (quantize detour times) (H10). | S–M | P2 |
@@ -61,7 +80,7 @@ demands it. `E3` (graph editor) is parked as premature for the POC stage.
 
 | Item | What | Size | Proposed priority |
 |---|---|---|---|
-| B1 | Fix the four player-reachable incoherences in the slice — seal-on-look (H6), carried-seal window (H7), re-loss scene, stale companion latch — all editable in the existing chapter files today. | S | **P0** (cheap, correctness) |
+| B1 | Fix the four player-reachable incoherences in the slice — seal-on-look (H6), carried-seal window (H7), re-loss scene, stale companion latch — all editable in the existing chapter files today. | S | **✅ DONE** (`7402474`, validated CLOSED) |
 | B2 | Add the **"earning detour"** class to the method — a budgeted few rejoining detours that set one readable flag a later choice/line consumes, turning cosmetic detours into agency (H14). | M | P1 |
 | B3 | Make the marquee choices *felt*: honest splint-vs-push (H15), signpost the `flood_water` branch, give scheduled events one legible instrument (H16). | S–M | P1 |
 | B4 | Add a Stage-1 **rhythm-variation** check + the loop-back-must-change-something rule to the method (H16). | S | P2 |
@@ -87,8 +106,8 @@ for the project at hand (resources, scheduled events, multi-chapter carry, etc.)
 
 | Item | What | Size | Proposed priority |
 |---|---|---|---|
-| E1 | The contract linter / **machine-checked variable registry** — *re-ranked to #1* by the scaling lens (was #2). Same as A1. | M | **P0** |
-| E2 | The **seeded walker** + value-at-endings report (same as A4). | M–L | P1 |
+| E1 | The contract linter / **machine-checked variable registry** — *re-ranked to #1* by the scaling lens (was #2). Same as A1. | M | **✅ v1 DONE** (= A1) |
+| E2 | The **seeded walker** + value-at-endings report (same as A4). | M–L | **✅ core DONE** (= A4) |
 | E3 | **Graph + variable-panel editor** — the human-facing surface (Twine/articy-shaped) for the eventual creator product. | L | P3 |
 
 ### WS-G — Front-end: a native-mobile video-game experience
@@ -113,11 +132,12 @@ proven `GameRunner`.*
 
 ## Locked sequencing
 
-- **Sprint 1 — Safety slice (no un-freeze, NOW):**
-  `A1`/`E1` cross-chapter **contract + latch linter** (container layer) · `B1` fix the **four player
-  incoherences** (chapter files) · `F1` fuzzer stays in CI. *Exit: book-scale is drift-safe, freeze intact.*
-- **Sprint 2 — Verification + honesty (as the book demands):**
-  `A4`/`E2` **seeded walker + value-at-endings report** (built container-side first) → then the first
+- **Sprint 1 — Safety slice (no un-freeze): ✅ COMPLETE.**
+  `A1`/`E1` cross-chapter **contract + latch linter** ✅ · `B1` fix the **four player incoherences** ✅ ·
+  `F1` fuzzer in CI ✅. *Exit reached: book-scale is drift-safe, freeze intact.*
+- **Sprint 2 — Verification + honesty (IN PROGRESS):**
+  `A4`/`E2` **seeded walker + value-at-endings report** ✅ (F4/F7 done; present/per-branch reachability still
+  to add) → **NEXT:** `A1 v1.1` ancestor-aware check (container-side, careful — FP risk) → then the first
   *deliberate* v1.4 engine opening: `A2` negative-time lint + `A3` node-named endings (closes both
   honesty seams). `A5` event hygiene rides along.
 - **Sprint 3 — The book:**

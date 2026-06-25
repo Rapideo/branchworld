@@ -56,6 +56,10 @@
 - **Recommended change (small):** a `walkStateSpace(story, { seedState })` option (or a tiny seeded-walk
   harness over `seedChapterStory`) so a chapter can be exhaustively walked from a representative carried-in
   state — closing the verification gap chaptering opens.
+- **UPDATE (2026-06-24): DONE (container-side).** Built the tiny seeded-walk harness as
+  `seededWalk.ts` — `walkSeeded(story, seed)` walks a chapter from a representative carried-in state; proven
+  that seeding `cave_all_together` / a low lamp makes the carry-only endings reachable. No engine change.
+  (A native `walkStateSpace({seedState})` is still the cleaner long-term home; the harness is the v1.)
 
 ### F5 — Scheduled-event present/absent reachability is navigation-fragile
 - **Wanted:** an event that fires *present* if the player is at the spot when it triggers, *absent* if not —
@@ -93,6 +97,9 @@
 - **Recommended change (medium):** an authoring/lint aid that reports, per resource, the min/max value at
   every reachable ending (so "is the dark ending reachable? does the clean route survive?" is answered by
   the tool, not by hand). Pairs naturally with F4's seeded walk.
+- **UPDATE (2026-06-24): DONE (container-side).** `valuesAtEndings(story, {seed})` in `seededWalk.ts`
+  reports the min/max of each resource at every reachable ending — the calibration table, by tool not by
+  hand. Pairs with the F4 seeded walk as recommended.
 
 ### F8 — State-resolved endings can't tell *which node* you resolved at
 - **Wanted:** "you pulled through to the far rift" (a crossing-success ending) vs "you waited it out" (a

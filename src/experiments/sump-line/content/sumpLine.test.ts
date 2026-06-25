@@ -56,4 +56,28 @@ describe('The Sump Line — the wired game', () => {
     expect(v.finalEndingId).toBe('end_dark_high');
     expect(v.state.vars.cave_dark_out).toBe(true);
   });
+
+  it('a companion lost in ch1 is NOT re-lost at the ch2 oxbow — crosses alone, togetherness never claimed (H/F-C, F-E)', () => {
+    const g = new GameRunner(sumpLine);
+    // ch1: push on (Rolly hurt), scout high, strand Rolly at the ledge, climb out alone
+    ['c_gear_in', 'c_descend', 'c_streamway', 'c_press', 'c_to_rolly', 'c_push', 'c_to_choke', 'c_scout_high', 'c_strand', 'c_climb_alone'].forEach((c) => g.choose(c));
+    expect(g.view().chapterId).toBe('ch2_high');
+    expect(g.view().state.vars.cave_someone_lost).toBe(true);
+    expect(g.view().state.vars.cave_all_together).toBe(false); // the strand cleared the togetherness latch (F-E)
+
+    // ch2: the slow rig is caught at the oxbow by the second pulse (present)
+    ['c_rig', 'c_aven_on', 'c_pitch_on', 'c_to_oxbow'].forEach((c) => g.choose(c));
+    expect(g.view().node.id).toBe('n_pulse_present');
+    // already lost a chapter ago: the fresh-loss choice is gated off; only "cross alone" remains (F-C)
+    expect(g.view().choices.find((c) => c.id === 'c_cross_fast')?.available).toBe(false);
+    expect(g.view().choices.find((c) => c.id === 'c_cross_alone')?.available).toBe(true);
+    g.choose('c_cross_alone');
+
+    ['c_to_crystal', 'c_traverse_on', 'c_freeclimb_shaft'].forEach((c) => g.choose(c));
+    const v = g.choose('c_climb_last');
+    expect(v.gameOver).toBe(true);
+    // an honest ending for a lost (and possibly dark) run — never the "all three" reunion
+    expect(v.finalEndingId).not.toBe('end_daylight_all_three');
+    expect(v.state.vars.cave_all_together).toBe(false);
+  });
 });

@@ -196,7 +196,10 @@ export const ch2High: Story = {
         'The cold of it hits before the wet does. Your lamp’s disc jumps and skitters on the heaving surface. There is no time to think it through; there is only the far side, and the water between you and it rising while you watch. The cave is not trying to take you. The water is only doing what water does when more of it arrives than the passage can hold. But knowing that does not give you back the seconds the flood is eating.',
       choices: [
         { id: 'c_haul', label: 'Haul Rolly across ahead of the surge.', destination: 'n_after_oxbow', conditions: [{ field: 'companion_status', op: 'equals', value: 'with_you' }], effects: [{ field: 'time', op: 'add_minutes', value: '15' }, { field: 'rope_pitches', op: 'decrement', value: '1' }] },
-        { id: 'c_cross_fast', label: 'Cross fast and don’t look back.', destination: 'n_lose_here', effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
+        // Fresh loss — only if there is still someone to lose here. Someone already lost a chapter ago
+        // (carried cave_someone_lost) crosses alone (below), without re-narrating the loss (F-C).
+        { id: 'c_cross_fast', label: 'Cross fast and don’t look back.', destination: 'n_lose_here', conditions: [{ field: 'cave_someone_lost', op: 'is_false' }], effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
+        { id: 'c_cross_alone', label: 'Cross alone — as you have been since the ledge.', destination: 'n_after_oxbow', conditions: [{ field: 'cave_someone_lost', op: 'is_true' }], effects: [{ field: 'time', op: 'add_minutes', value: '15' }] },
       ],
     },
     {
@@ -207,6 +210,7 @@ export const ch2High: Story = {
       entryEffects: [
         { field: 'location', op: 'change_location', value: 'oxbow' },
         { field: 'cave_someone_lost', op: 'set', value: 'true' },
+        { field: 'cave_all_together', op: 'set', value: 'false' }, // a loss clears the togetherness latch (H/F-E)
         { field: 'companion_status', op: 'set', value: 'lost' },
         { field: 'clues', op: 'add_clue', value: 'clue_oxbow_cut' },
       ],
@@ -346,6 +350,7 @@ export const ch2High: Story = {
       priority: 0,
       conditions: [
         { field: 'cave_all_together', op: 'is_true' },
+        { field: 'cave_someone_lost', op: 'is_false' }, // honesty: "all three" cannot fire if anyone was lost (H/F-E)
         { field: 'cave_dark_out', op: 'is_false' },
         { field: 'cave_hypothermic', op: 'is_false' },
       ],

@@ -840,7 +840,7 @@
         body: "The boulder choke is where the cave chokes itself half shut \u2014 a fall of car-sized blocks dropped here in some older flood, the water finding its way through the low gaps in white roaring threads.\n\nDown at the bottom, under the blocks, is the sump duck: the short drowned crawl that is the only known low way out, and the water that just rose is the water that feeds it. Above, a dry rift climbs away into the dark, breathing cold air down at your face \u2014 the high way, the long way, a climb. Your lamp\u2019s disc shivers on the wet blocks; the battery is tiring, and the dark at the edge of the light has come in a little closer than it was.\n\nThis is the fork the whole afternoon has been carrying you toward. Down, into the water and the duck, fast and short and drowned. Or up, into the dry rift, long and cold and a climb. The water is not going to wait for you to decide.",
         choices: [
           { id: "c_scout_high", label: "Scout the dry rift, up over the choke.", destination: "n_high_decide", effects: [{ field: "time", op: "add_minutes", value: "10" }] },
-          { id: "c_check_low", label: "Climb down to the sump duck and look at the low way.", destination: "n_seal_present", conditions: [{ field: "cave_sump_sealed", op: "is_false" }], effects: [{ field: "location", op: "change_location", value: "sump_pool" }, { field: "time", op: "add_minutes", value: "10" }] },
+          { id: "c_check_low", label: "Climb down to the sump duck and look at the low way.", destination: "n_duck_look", conditions: [{ field: "cave_sump_sealed", op: "is_false" }], effects: [{ field: "location", op: "change_location", value: "sump_pool" }, { field: "time", op: "add_minutes", value: "10" }] },
           { id: "c_godown", label: "Commit straight to the water \u2014 it\u2019s rising fast.", destination: "n_take_low", conditions: [{ field: "flood_water", op: "gte", value: "2" }], effects: [{ field: "time", op: "add_minutes", value: "10" }] },
           { id: "c_study", label: "Study the choke and the water a moment longer.", destination: "n_choke_study", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
         ]
@@ -893,6 +893,8 @@
           { field: "location", op: "change_location", value: "choke_ledge" },
           { field: "companion_status", op: "set", value: "lost" },
           { field: "cave_someone_lost", op: "set", value: "true" },
+          { field: "cave_all_together", op: "set", value: "false" },
+          // a loss clears the togetherness latch
           { field: "clues", op: "add_clue", value: "clue_left_rolly" }
         ],
         body: 'There is no version of the high climb that Rolly\u2019s ankle survives, and you both know it before either of you says it. You fix a line down to the ledge below and clip Rolly to it, where it is dry, where the water cannot reach \u2014 yet.\n\n"Go," Rolly says. "Get out, send people in. I\u2019m fine here. I\u2019m fine." The third time is the one neither of you believes. You climb. Below you Rolly\u2019s lamp becomes a smaller and smaller coin on the rock, and then the rift takes you round a corner and it is gone, and there is only your own light and the dry dark and the thing you are choosing to do.',
@@ -912,6 +914,23 @@
         ],
         body: "You crest the top of the choke and the dry rift opens out ahead into the upper system, and the sound of the flood drops away below and behind until it is just the cave\u2019s own breathing again. The water is behind you now. Everything ahead is up, and dry, and dark, and a long way.",
         choices: []
+      },
+      {
+        // Looking at the still-open duck (player choice, any time before the seal). Reconnaissance only:
+        // it does NOT seal the cave or consume ev_sump_seal — that beat belongs to the timed event
+        // (n_seal_present), reached only by being at the pool when the seal actually comes.
+        id: "n_duck_look",
+        title: "The Sump Duck",
+        type: "discovery",
+        location: "sump_pool",
+        entryEffects: [{ field: "location", op: "change_location", value: "sump_pool" }],
+        body: "You climb down to the lip of the sump pool to look at the low way while there is still a low way to look at.\n\nThe duck is open \u2014 a hand\u2019s width of black airspace between the rising water and the rock roof, the short drowned crawl that is the only known way out under the choke. The water is climbing it without hurry, a slow brown tide answerable to rain that fell on the tops days ago and is only now arriving. There is room to take it now. There may not be, soon. There is no honest way to read, from here, how long the cave means to leave the gap; nobody can. You can dive it now, on the strength of that. Or you can climb back to the choke and the dry rift and leave the water to the water.",
+        choices: [
+          { id: "c_dive_open", label: "Take the duck now, while it\u2019s still open.", destination: "n_take_low", conditions: [{ field: "cave_sump_sealed", op: "is_false" }], effects: [{ field: "time", op: "add_minutes", value: "5" }] },
+          // Leave the water for the dry rift. Goes FORWARD to the high decision (not back to the choke) —
+          // a non-sealing loop back into the hub multiplies walker states by arrival-time (H10) and blew the cap.
+          { id: "c_duck_back", label: "Leave the water \u2014 climb up to the high way.", destination: "n_high_decide", effects: [{ field: "location", op: "change_location", value: "choke_ledge" }, { field: "time", op: "add_minutes", value: "10" }] }
+        ]
       },
       {
         id: "n_seal_present",
@@ -1118,7 +1137,10 @@
         body: "You are out on the oxbow bypass, mid-span over the void, when the roar climbs up to meet you.\n\nIt comes from below \u2014 from the black gulf the bypass bridges, the place where you could hear water but not see it. A second pulse, surging up the system from the drowned streamway, coming fast. The sound rises through the rock and through the soles of your boots and then the water itself is there, a brown lip clawing over the abandoned meander, taking the dry floor you are standing on and making it a river.\n\nThe cold of it hits before the wet does. Your lamp\u2019s disc jumps and skitters on the heaving surface. There is no time to think it through; there is only the far side, and the water between you and it rising while you watch. The cave is not trying to take you. The water is only doing what water does when more of it arrives than the passage can hold. But knowing that does not give you back the seconds the flood is eating.",
         choices: [
           { id: "c_haul", label: "Haul Rolly across ahead of the surge.", destination: "n_after_oxbow", conditions: [{ field: "companion_status", op: "equals", value: "with_you" }], effects: [{ field: "time", op: "add_minutes", value: "15" }, { field: "rope_pitches", op: "decrement", value: "1" }] },
-          { id: "c_cross_fast", label: "Cross fast and don\u2019t look back.", destination: "n_lose_here", effects: [{ field: "time", op: "add_minutes", value: "10" }] }
+          // Fresh loss — only if there is still someone to lose here. Someone already lost a chapter ago
+          // (carried cave_someone_lost) crosses alone (below), without re-narrating the loss (F-C).
+          { id: "c_cross_fast", label: "Cross fast and don\u2019t look back.", destination: "n_lose_here", conditions: [{ field: "cave_someone_lost", op: "is_false" }], effects: [{ field: "time", op: "add_minutes", value: "10" }] },
+          { id: "c_cross_alone", label: "Cross alone \u2014 as you have been since the ledge.", destination: "n_after_oxbow", conditions: [{ field: "cave_someone_lost", op: "is_true" }], effects: [{ field: "time", op: "add_minutes", value: "15" }] }
         ]
       },
       {
@@ -1129,6 +1151,8 @@
         entryEffects: [
           { field: "location", op: "change_location", value: "oxbow" },
           { field: "cave_someone_lost", op: "set", value: "true" },
+          { field: "cave_all_together", op: "set", value: "false" },
+          // a loss clears the togetherness latch (H/F-E)
           { field: "companion_status", op: "set", value: "lost" },
           { field: "clues", op: "add_clue", value: "clue_oxbow_cut" }
         ],
@@ -1242,6 +1266,8 @@
         priority: 0,
         conditions: [
           { field: "cave_all_together", op: "is_true" },
+          { field: "cave_someone_lost", op: "is_false" },
+          // honesty: "all three" cannot fire if anyone was lost (H/F-E)
           { field: "cave_dark_out", op: "is_false" },
           { field: "cave_hypothermic", op: "is_false" }
         ],
@@ -1291,8 +1317,8 @@
       {
         id: "ev_water_drops",
         title: "The Water Drops",
-        trigger: [{ field: "time", op: "time_after", value: "14:48" }],
-        // after the drowned passage (14:45) but at/before the crawl (14:55), so going-to-the-crawl witnesses the window
+        trigger: [{ field: "time", op: "time_after", value: "14:48" }, { field: "cave_sump_sealed", op: "is_false" }],
+        // after the drowned passage (14:45) but at/before the crawl (14:55), so going-to-the-crawl witnesses the window; AND only if not already sealed coming in from ch1 (else the "window opens" prose plays for a dive that's gated off — H7)
         eventLocation: "flooded_crawl",
         ifPresentNode: "n_drop_present",
         ifAbsentEffects: [

@@ -49,7 +49,7 @@ export const ch2Sump: Story = {
     {
       id: 'ev_water_drops',
       title: 'The Water Drops',
-      trigger: [{ field: 'time', op: 'time_after', value: '14:48' }], // after the drowned passage (14:45) but at/before the crawl (14:55), so going-to-the-crawl witnesses the window
+      trigger: [{ field: 'time', op: 'time_after', value: '14:48' }, { field: 'cave_sump_sealed', op: 'is_false' }], // after the drowned passage (14:45) but at/before the crawl (14:55), so going-to-the-crawl witnesses the window; AND only if not already sealed coming in from ch1 (else the "window opens" prose plays for a dive that's gated off — H7)
       eventLocation: 'flooded_crawl',
       ifPresentNode: 'n_drop_present',
       ifAbsentEffects: [

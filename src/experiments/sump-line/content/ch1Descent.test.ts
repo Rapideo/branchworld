@@ -9,10 +9,25 @@ describe('ch1_descent — "The Pulse" (expanded, ~26 beats)', () => {
   });
 
   it('stays exhaustively walkable: no cap, no softlocks, both fork endings reachable', () => {
-    const r = walkStateSpace(ch1Descent);
+    // At 26 beats with loop-backs + the open-duck reconnaissance node, the exhaustive walk explores
+    // ~53k states — over the 50k DEFAULT backstop but fully tractable (this is exactly H10: distinct
+    // accumulated time at reconverging hubs dominates, and H9: evening-scale chapters need the seeded/
+    // scalable walker). The walk completes cleanly: no soft-locks, no orphan endings, both forks reached.
+    const r = walkStateSpace(ch1Descent, { cap: 80000 });
     expect(r.capHit).toBe(false);
     expect(r.softlocks).toEqual([]);
     expect(r.orphanEndings).toEqual([]);
+  });
+
+  it('looking at the low way does NOT seal the cave early (H6: looking ≠ sealing)', () => {
+    const g = new GameEngine(ch1Descent);
+    // a brisk push to the choke, well before the 15:00 seal
+    ['c_gear_in', 'c_descend', 'c_streamway', 'c_press', 'c_to_rolly', 'c_push', 'c_to_choke'].forEach((c) => g.choose(c));
+    const v = g.choose('c_check_low');
+    expect(v.node.id).toBe('n_duck_look'); // reconnaissance, not the seal event
+    expect(v.state.vars.cave_sump_sealed).toBe(false); // looking didn't seal it
+    // the open duck still offers the dive (sealed is false) and a way back up to the high route
+    expect(v.choices.find((c) => c.id === 'c_dive_open')?.available).toBe(true);
   });
 
   it('the HIGH route, carrying Rolly the whole way -> ch1_to_high, together', () => {

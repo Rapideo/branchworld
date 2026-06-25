@@ -355,7 +355,7 @@ export const ch1Descent: Story = {
         'This is the fork the whole afternoon has been carrying you toward. Down, into the water and the duck, fast and short and drowned. Or up, into the dry rift, long and cold and a climb. The water is not going to wait for you to decide.',
       choices: [
         { id: 'c_scout_high', label: 'Scout the dry rift, up over the choke.', destination: 'n_high_decide', effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
-        { id: 'c_check_low', label: 'Climb down to the sump duck and look at the low way.', destination: 'n_seal_present', conditions: [{ field: 'cave_sump_sealed', op: 'is_false' }], effects: [{ field: 'location', op: 'change_location', value: 'sump_pool' }, { field: 'time', op: 'add_minutes', value: '10' }] },
+        { id: 'c_check_low', label: 'Climb down to the sump duck and look at the low way.', destination: 'n_duck_look', conditions: [{ field: 'cave_sump_sealed', op: 'is_false' }], effects: [{ field: 'location', op: 'change_location', value: 'sump_pool' }, { field: 'time', op: 'add_minutes', value: '10' }] },
         { id: 'c_godown', label: 'Commit straight to the water — it’s rising fast.', destination: 'n_take_low', conditions: [{ field: 'flood_water', op: 'gte', value: '2' }], effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
         { id: 'c_study', label: 'Study the choke and the water a moment longer.', destination: 'n_choke_study', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] },
       ],
@@ -415,6 +415,7 @@ export const ch1Descent: Story = {
         { field: 'location', op: 'change_location', value: 'choke_ledge' },
         { field: 'companion_status', op: 'set', value: 'lost' },
         { field: 'cave_someone_lost', op: 'set', value: 'true' },
+        { field: 'cave_all_together', op: 'set', value: 'false' }, // a loss clears the togetherness latch
         { field: 'clues', op: 'add_clue', value: 'clue_left_rolly' },
       ],
       body:
@@ -437,6 +438,25 @@ export const ch1Descent: Story = {
       body:
         'You crest the top of the choke and the dry rift opens out ahead into the upper system, and the sound of the flood drops away below and behind until it is just the cave’s own breathing again. The water is behind you now. Everything ahead is up, and dry, and dark, and a long way.',
       choices: [],
+    },
+    {
+      // Looking at the still-open duck (player choice, any time before the seal). Reconnaissance only:
+      // it does NOT seal the cave or consume ev_sump_seal — that beat belongs to the timed event
+      // (n_seal_present), reached only by being at the pool when the seal actually comes.
+      id: 'n_duck_look',
+      title: 'The Sump Duck',
+      type: 'discovery',
+      location: 'sump_pool',
+      entryEffects: [{ field: 'location', op: 'change_location', value: 'sump_pool' }],
+      body:
+        'You climb down to the lip of the sump pool to look at the low way while there is still a low way to look at.\n\n' +
+        'The duck is open — a hand’s width of black airspace between the rising water and the rock roof, the short drowned crawl that is the only known way out under the choke. The water is climbing it without hurry, a slow brown tide answerable to rain that fell on the tops days ago and is only now arriving. There is room to take it now. There may not be, soon. There is no honest way to read, from here, how long the cave means to leave the gap; nobody can. You can dive it now, on the strength of that. Or you can climb back to the choke and the dry rift and leave the water to the water.',
+      choices: [
+        { id: 'c_dive_open', label: 'Take the duck now, while it’s still open.', destination: 'n_take_low', conditions: [{ field: 'cave_sump_sealed', op: 'is_false' }], effects: [{ field: 'time', op: 'add_minutes', value: '5' }] },
+        // Leave the water for the dry rift. Goes FORWARD to the high decision (not back to the choke) —
+        // a non-sealing loop back into the hub multiplies walker states by arrival-time (H10) and blew the cap.
+        { id: 'c_duck_back', label: 'Leave the water — climb up to the high way.', destination: 'n_high_decide', effects: [{ field: 'location', op: 'change_location', value: 'choke_ledge' }, { field: 'time', op: 'add_minutes', value: '10' }] },
+      ],
     },
     {
       id: 'n_seal_present',

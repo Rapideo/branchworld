@@ -376,5 +376,27 @@ export function lintResources(story: Story): LintIssue[] {
   }
   for (const ev of story.events) scanEffects(ev.ifAbsentEffects, ev.id);
 
+  // ATZERO_PRIORITY_DOMINANCE (F2) — post-A3 the atZero ending competes by priority instead of
+  // short-circuiting, so a resource death is honest only if it strictly out-ranks every non-default ending it
+  // can co-occur with. Enforce that here (the firing state includes the atZero setFlag, so a death-guarded
+  // ending is provably exclusive). Zero-FP: only fires when co-occurrence is NOT provably contradictory.
+  const endingsById = new Map(story.endings.map((e) => [e.id, e]));
+  const nonDefaultEndings = story.endings.filter((e) => !e.isDefault);
+  for (const r of resources) {
+    const death = r.atZero?.ending ? endingsById.get(r.atZero.ending) : undefined;
+    if (!death || death.isDefault) continue;
+    const deathConds: Condition[] = [...(death.conditions ?? [])];
+    if (r.atZero?.setFlag) deathConds.push({ field: r.atZero.setFlag, op: 'is_true' });
+    for (const o of nonDefaultEndings) {
+      if (o.id === death.id) continue;
+      if (contradicts([...deathConds, ...(o.conditions ?? [])])) continue; // provably cannot co-occur
+      if ((death.priority ?? 0) <= (o.priority ?? 0)) {
+        issues.push({ level: 'error', code: 'ATZERO_PRIORITY_DOMINANCE',
+          message: `Resource ${r.id} death ending '${death.id}' (priority ${death.priority ?? 0}) does not out-rank co-occurring ending '${o.id}' (priority ${o.priority ?? 0}); a resource death could be masked — raise '${death.id}' priority or make the two endings mutually exclusive`,
+          where: death.id });
+      }
+    }
+  }
+
   return issues;
 }

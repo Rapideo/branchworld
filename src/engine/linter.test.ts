@@ -383,4 +383,16 @@ describe('linter — resources', () => {
     s.nodes[0].choices = [{ id: 'x', label: 'x', destination: 'a', effects: [{ field: 'trust', op: 'set', value: '9' }] }];
     expect(lintStory(s).warnings.some((w) => w.code === 'VALUE_OUT_OF_BOUND')).toBe(true);
   });
+
+  it('ATZERO_PRIORITY_DOMINANCE — a death ending that does not out-rank a co-occurring ending (F2)', () => {
+    const s = resStory();
+    s.variables.push({ name: 'reached', type: 'boolean', default: false, purpose: 'x' } as never);
+    // 'survive' (priority 5) can co-occur with the dead lamp (dead && reached) yet out-ranks the death (priority 0)
+    s.endings.push({ id: 'survive', name: 'Survive', summary: '', conditions: [{ field: 'reached', op: 'is_true' }], priority: 5 } as never);
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('ATZERO_PRIORITY_DOMINANCE');
+  });
+
+  it('does NOT flag a death ending that is exclusive from / out-ranks co-occurring endings (no false positive)', () => {
+    expect(lintStory(resStory()).errors.map((e) => e.code)).not.toContain('ATZERO_PRIORITY_DOMINANCE');
+  });
 });

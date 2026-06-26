@@ -489,8 +489,10 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
   });
 
   // PROBE-C: an atZero ending short-circuits the priority resolver.
-  // PROBE-C (CLOSED by A3): the atZero ending no longer short-circuits — it competes by priority, so the
-  // higher-priority state-matched ending now wins. Was systems-finding S5 / H3.
+  // PROBE-C (CLOSED by A3 + guarded by F2): the atZero ending no longer short-circuits — it competes by
+  // priority, so a higher-priority state-matched ending CAN win (the H3 engine fix). This thin story — a
+  // survival ending out-ranking the death WITHOUT guarding against it — is exactly what the F2
+  // ATZERO_PRIORITY_DOMINANCE lint now flags. So this probe proves both the engine behavior and the lint.
   it('PROBE-C (closed): an atZero ending competes by priority; the higher-priority state ending wins (H3 fixed)', () => {
     const story: Story = {
       id: 'probe_atzero',
@@ -522,7 +524,8 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
         { id: 'e_dark', name: 'Dark (lamp died)', conditions: [{ field: 'lamp', op: 'lte', value: '0' }], summary: '', priority: 1 },
       ],
     };
-    expect(lintStory(story).errors).toEqual([]);
+    // F2 now flags this exact authoring (death 'e_dark' pri1 out-ranked by co-occurring 'e_grey' pri5, unguarded):
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('ATZERO_PRIORITY_DOMINANCE');
 
     const eng = new GameEngine(story);
     eng.start();

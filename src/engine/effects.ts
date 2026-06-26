@@ -47,8 +47,11 @@ export function applyEffect(s: WorldState, e: Effect, bounds?: BoundsMap): World
       return { ...s, inventory: s.inventory.filter((x) => x !== (e.value ?? e.field)) };
     case 'change_location':
       return { ...s, location: e.value ?? s.location };
-    case 'add_minutes':
-      return { ...s, time: addMinutes(s.time, num(coerce(e.value))) };
+    case 'add_minutes': {
+      // time is monotonic — a negative delta may not rewind the clock (H2)
+      const next = addMinutes(s.time, num(coerce(e.value)));
+      return { ...s, time: Math.max(s.time, next) };
+    }
     case 'mark_event_completed':
       return { ...s, completedEvents: uniqPush(s.completedEvents, e.value ?? e.field) };
     case 'mark_visited':

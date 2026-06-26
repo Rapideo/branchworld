@@ -439,11 +439,11 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
     expect(walk.softlocks).toContain('n_trap'); // the walker is NOT — it catches what lint can't
   });
 
-  // PROBE-B: negative add_minutes rewinds the clock and REVIVES a time-driven resource.
-  // Proves systems-finding S1: F6's "time-driven meters can only fall" is false under rewind,
-  // and the linter has no NEGATIVE_TIME_DELTA guard. (The team verified this by reading code;
-  // here it actually runs.)
-  it('PROBE-B: a negative add_minutes rewinds time and pushes a time-driven lamp back UP (lint clean)', () => {
+  // PROBE-B (CLOSED by A2): a negative add_minutes is now both lint-flagged and runtime-refused.
+  // Was systems-finding S1 / H2: rewind made F6's "time-driven meters can only fall" false and the
+  // linter had no NEGATIVE_TIME_DELTA guard. A2 added the lint + the "time is monotonic" invariant;
+  // this probe now proves the hole is closed (it actually runs).
+  it('PROBE-B (closed): a negative add_minutes is lint-flagged and cannot rewind time (H2 fixed)', () => {
     const story: Story = {
       id: 'probe_rewind',
       title: 'Rewind',
@@ -472,21 +472,20 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
       ],
       endings: [{ id: 'e_default', name: 'Default', conditions: [], summary: '', isDefault: true }],
     };
-    expect(lintStory(story).errors).toEqual([]); // no rule forbids negative time
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('NEGATIVE_TIME_DELTA'); // now caught
 
     const eng = new GameEngine(story);
     eng.start();
     const atMid = eng.choose('c_advance'); // time 08:30, lamp = 100 - 10*floor(30/10) = 70
     const lampMid = Number(atMid.state.vars.lamp);
     const tMid = atMid.state.time;
-    const atBack = eng.choose('c_rewind'); // time 08:10, lamp = 100 - 10*floor(10/10) = 90
+    const atBack = eng.choose('c_rewind'); // -20 clamped away: time holds 08:30, lamp holds 70
     const lampBack = Number(atBack.state.vars.lamp);
     const tBack = atBack.state.time;
 
     expect(lampMid).toBe(70);
-    expect(lampBack).toBe(90);
-    expect(lampBack).toBeGreaterThan(lampMid); // the "can't be restored" meter went UP
-    expect(tBack).toBeLessThan(tMid); // time ran backwards
+    expect(tBack).toBe(tMid); // the rewind was refused — time did not run backwards
+    expect(lampBack).toBe(lampMid); // and the time-driven meter did NOT revive
   });
 
   // PROBE-C: an atZero ending short-circuits the priority resolver.

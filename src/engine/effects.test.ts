@@ -16,6 +16,9 @@ describe('effects', () => {
   it('advances engine-derived time', () => {
     expect(applyEffect(base, { field: 'time', op: 'add_minutes', value: '15' }).time).toBe(915);
   });
+  it('never rewinds time on a negative add_minutes (monotonic invariant, H2)', () => {
+    expect(applyEffect(base, { field: 'time', op: 'add_minutes', value: '-30' }).time).toBe(900);
+  });
   it('manages clues, items, location, visited, events', () => {
     expect(applyEffect(base, { field: 'clues', op: 'add_clue', value: 'plate' }).clues).toEqual(['plate']);
     expect(applyEffect(base, { field: 'location', op: 'change_location', value: 'Diner' }).location).toBe('Diner');

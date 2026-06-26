@@ -14,7 +14,7 @@
 | **H1, H13** (silent cross-chapter drift; latch discipline) | **Addressed (v1)** | A1 contract+latch linter (`lintGameContracts.ts`, commit `0c1558d`) — `CONTRACT_TYPE_MISMATCH`, `CONTRACT_READ_NO_PRODUCER`, `CONTRACT_DOMAIN_DRIFT`, `LATCH_IN_CHOICE_EFFECT`. *Ancestor-aware `READ_NO_ANCESTOR_PRODUCER` + mutex-latch groups = A1 v1.1 (pending).* |
 | **H6, H7** (+ the F-C/F-E content incoherences) | **Fixed** | B1 (commit `7402474`), validated CLOSED by two team agents. |
 | **F4, F7** (carry-only endings unverifiable; resource calibration by hand) | **Addressed (core)** | A4 seeded walker + value-at-endings (`seededWalk.ts`, commit `74cf36d`). |
-| **H2** (negative-time exploit) | **Open** — deliberate v1.4 | A2 `NEGATIVE_TIME_DELTA` lint (engine change). |
+| **H2** (negative-time exploit) | **✅ Closed (A2, v1.4)** | `NEGATIVE_TIME_DELTA` lint + monotonic-time invariant (`effects.ts`/`linter.ts`); fuzzer PROBE-B flipped to prove the closure. |
 | **H3, H4, H5** (atZero short-circuit; deadline voids choice; default-ending hedge) | **Open** — deliberate v1.4 | A3 node-named endings (engine change). |
 | **H8, H10, H11, H12** (present/per-branch reachability; cap driver; calibration coupling) | **Partly open** | A4 covers F4/F7; present/per-branch reachability + bucketing still to add. |
 | **H9** (walker must scale) | **Demonstrated in practice** | ch1 exhaustive walk is ~53k states (>50k default); raised that test's cap. Seeded walk (A4) is the first half; a scalable/bucketed walk (A7) is the rest. |
@@ -58,6 +58,10 @@ deadline indefinitely, while the lint's `timeBounds` *sums* the negative and mis
 `CLOCK_CANNOT_BITE`. The single cheapest high-value fix.
 *Lens: Systems-S1. Proof: Track A **PROBE-B** (lamp 70→90 on rewind, lint clean). Fix: **`NEGATIVE_TIME_DELTA`
 lint error + "time is monotonic" invariant** (S).*
+- **UPDATE (2026-06-26): CLOSED by A2 (v1.4).** `add_minutes` is now clamped monotonic in `effects.ts`
+  (`time: Math.max(s.time, next)` — the clock never rewinds), and `linter.ts` raises `NEGATIVE_TIME_DELTA`
+  on any negative delta at authoring time. Fuzzer **PROBE-B** flipped from proving the exploit to proving
+  the closure. 235 tests green; typecheck clean. First deliberate v1.4 un-freeze.
 
 ### Tier 1 — ending-honesty / resolution-order
 

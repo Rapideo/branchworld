@@ -212,6 +212,23 @@ export function lintStory(story: Story): LintResult {
     err('UNDEFINED_LOCATION', `startLocation ${story.startLocation} is not a defined location`);
   }
 
+  // NEGATIVE_TIME_DELTA — time is monotonic; add_minutes may never rewind the clock (H2)
+  const checkTimeDeltas = (es: Effect[] | undefined, where: string) => {
+    for (const e of es || []) {
+      if (e.op !== 'add_minutes') continue;
+      const n = Number(e.value);
+      if (Number.isFinite(n) && n < 0) {
+        err('NEGATIVE_TIME_DELTA',
+          `add_minutes delta '${e.value}' is negative; time is monotonic and may not rewind`, where);
+      }
+    }
+  };
+  for (const n of story.nodes) {
+    checkTimeDeltas(n.entryEffects, n.id);
+    for (const c of n.choices || []) checkTimeDeltas(c.effects, `${n.id}:${c.id}`);
+  }
+  for (const ev of story.events) checkTimeDeltas(ev.ifAbsentEffects, ev.id);
+
   // reachability
   const reachable = computeReachable(story);
   const presentNodes = new Set(story.events.map((e) => e.ifPresentNode));

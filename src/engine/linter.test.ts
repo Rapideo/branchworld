@@ -169,6 +169,21 @@ describe('linter', () => {
   });
 });
 
+describe('NEGATIVE_TIME_DELTA — time is monotonic (H2)', () => {
+  it('flags an add_minutes effect with a negative value', () => {
+    const s = clean();
+    s.nodes[0].choices[0].effects = [{ field: 'time', op: 'add_minutes', value: '-15' }];
+    const r = lintStory(s);
+    expect(r.errors.map((e) => e.code)).toContain('NEGATIVE_TIME_DELTA');
+    expect(r.ok).toBe(false);
+  });
+
+  it('does NOT flag a positive add_minutes (no false positive)', () => {
+    const s = clean(); // its only add_minutes is +90
+    expect(lintStory(s).errors.map((e) => e.code)).not.toContain('NEGATIVE_TIME_DELTA');
+  });
+});
+
 describe('time-literal and unwinnable-deadline rules', () => {
   it('errors when a time literal falls outside [startTime, deadline] (TIME_LITERAL_OUT_OF_RANGE)', () => {
     const story = mkStory({

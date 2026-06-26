@@ -246,14 +246,26 @@ export function lintStory(story: Story): LintResult {
     err('DEFAULT_HAS_CONDITIONS', 'Default ending must have no conditions');
   }
 
-  // A3 — node-named endings (F8) + the out-of-time ending (H4) must reference real endings
+  // A3 — node-named endings (F8) + the out-of-time ending (H4) must reference real endings.
   for (const n of story.nodes) {
     if (n.endsWith && !endingIds.has(n.endsWith)) {
       err('NODE_ENDING_MISSING', `Node ${n.id} endsWith '${n.endsWith}' which is not a defined ending`, n.id);
     }
+    // F6 — a node that pins an ending must not also carry live choices (they are unreachable).
+    if (n.endsWith && (n.choices?.length ?? 0) > 0) {
+      warn('ENDSWITH_WITH_LIVE_CHOICES', `Node ${n.id} pins an ending via endsWith but also has choices — they are unreachable (the ending resolves on entry)`, n.id);
+    }
   }
-  if (story.outOfTimeEndingId && !endingIds.has(story.outOfTimeEndingId)) {
-    err('OUT_OF_TIME_ENDING_MISSING', `outOfTimeEndingId '${story.outOfTimeEndingId}' is not a defined ending`);
+  if (story.outOfTimeEndingId) {
+    if (!endingIds.has(story.outOfTimeEndingId)) {
+      err('OUT_OF_TIME_ENDING_MISSING', `outOfTimeEndingId '${story.outOfTimeEndingId}' is not a defined ending`);
+    } else {
+      // F5 — the out-of-time ending fires regardless of its own conditions (deadline path), so it must be condition-free.
+      const oot = story.endings.find((e) => e.id === story.outOfTimeEndingId);
+      if (oot && (oot.conditions?.length ?? 0) > 0) {
+        err('OUT_OF_TIME_HAS_CONDITIONS', `Out-of-time ending '${oot.id}' must have no conditions (it fires regardless of them via the deadline path)`, oot.id);
+      }
+    }
   }
 
   // overlap/shadow warnings — warn when we cannot prove two non-default endings are mutually exclusive

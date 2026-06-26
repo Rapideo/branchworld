@@ -198,6 +198,18 @@ export function lintGameContracts(game: Game): ContractLintResult {
   // ---- v1.1 — ancestor-aware + annotated checks (opt-in; zero-FP by author assertion) ----
   const ledgerByName = new Map(ledger.map((e) => [e.name, e]));
 
+  // CONTRACT_UNKNOWN_ANNOTATION (F4) — an annotation names a field absent from the derived ledger (renamed or
+  // typo'd → it silently guards nothing). Covers domains keys, mutex group members, and carriedRequired entries.
+  const knownNames = new Set(ledger.map((e) => e.name));
+  const checkAnnotation = (name: string, kind: string, where: string) => {
+    if (!knownNames.has(name)) {
+      err('CONTRACT_UNKNOWN_ANNOTATION', `${kind} references '${name}', which no chapter declares/reads/writes — it guards nothing (renamed or typo'd)`, where);
+    }
+  };
+  for (const name of Object.keys(game.domains ?? {})) checkAnnotation(name, 'domains', name);
+  for (const group of game.mutexLatches ?? []) for (const m of group) checkAnnotation(m, 'mutexLatches', m);
+  for (const ch of game.chapters) for (const v of ch.carriedRequired ?? []) checkAnnotation(v, `carriedRequired (chapter ${ch.id})`, ch.id);
+
   // CONTRACT_READ_NO_ANCESTOR_PRODUCER — a chapter's carriedRequired var has a path in with no upstream
   // producer. Chapter-granular and conservative: a chapter that writes V on SOME path still counts as a
   // producer (so the legitimate "the default IS the carried value on this path" case never false-positives);

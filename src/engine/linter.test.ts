@@ -190,6 +190,21 @@ describe('A3 — node-named + out-of-time ending references', () => {
   });
 });
 
+describe('P1 coherence lints — out-of-time conditions + endsWith choices (F5/F6)', () => {
+  it('OUT_OF_TIME_HAS_CONDITIONS — the out-of-time ending must be condition-free (F5)', () => {
+    const s = clean();
+    s.endings.push({ id: 'oot', name: 'OOT', summary: '', conditions: [{ field: 'knows', op: 'is_true' }] });
+    s.outOfTimeEndingId = 'oot';
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('OUT_OF_TIME_HAS_CONDITIONS');
+  });
+  it('ENDSWITH_WITH_LIVE_CHOICES — a node pins an ending but also has live choices (F6, warning)', () => {
+    const s = clean();
+    s.nodes[1].endsWith = 'win';
+    s.nodes[1].choices = [{ id: 'x', label: 'x', destination: 'a' }];
+    expect(lintStory(s).warnings.map((w) => w.code)).toContain('ENDSWITH_WITH_LIVE_CHOICES');
+  });
+});
+
 describe('NEGATIVE_TIME_DELTA — time is monotonic (H2)', () => {
   it('flags an add_minutes effect with a negative value', () => {
     const s = clean();

@@ -113,4 +113,16 @@ describe('A1 — cross-chapter contract + latch linter', () => {
     end.conditions = end.conditions.filter((c) => c.field !== 'cave_someone_lost'); // drop the partner guard
     expect(codes(lintGameContracts(g).warnings)).toContain('MUTEX_LATCH_UNGUARDED');
   });
+
+  it('CONTRACT_UNKNOWN_ANNOTATION — a domains entry naming a var no chapter has (F4)', () => {
+    const g = clone();
+    g.domains = { ...g.domains, ghost_var: ['a', 'b'] };
+    expect(codes(lintGameContracts(g).errors)).toContain('CONTRACT_UNKNOWN_ANNOTATION');
+  });
+
+  it('CONTRACT_UNKNOWN_ANNOTATION — a carriedRequired naming a var no chapter has (F4)', () => {
+    const g = clone();
+    chapter(g, 'ch2_high').carriedRequired = ['ghost_required'];
+    expect(codes(lintGameContracts(g).errors)).toContain('CONTRACT_UNKNOWN_ANNOTATION');
+  });
 });

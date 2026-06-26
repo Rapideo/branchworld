@@ -3,6 +3,11 @@
 > Sprint-1 safety tool. Closes the **book-killer silent-drift class** (HARDENING-FINDINGS H1/H13;
 > scaling-lens S1/S4/S6/S7). Built in the **container layer** (next to `lintGame`) — **zero engine
 > changes**, the freeze holds. This doc is the design to sign off before building.
+>
+> **STATUS (2026-06-26): v1 shipped (`0c1558d`); v1.1 shipped (`c96529e`).** The §9 decisions are resolved:
+> v1.1 is **annotation-gated only** (zero-FP) — `Chapter.carriedRequired`, `Game.domains`, `Game.mutexLatches`.
+> The derived §5 heuristic was deliberately **not** shipped: without an author assertion it could
+> false-positive on a legitimately-meaningful default. Annotation = the author asserts the contract.
 
 ## 1. The gap it closes (grounded in the actual code)
 

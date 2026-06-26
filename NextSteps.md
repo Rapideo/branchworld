@@ -9,7 +9,28 @@
 > (the team + fuzzer pass) and [`ENGINE-ASSESSMENT.md`](src/experiments/sump-line/ENGINE-ASSESSMENT.md)
 > (the F1–F9 log). The authoring method is in [`docs/authoring-method.md`](docs/authoring-method.md).
 
-## Status — end of 2026-06-24 session (resume anchor)
+## Status — 2026-06-26 (engine v1.4 wrap-up IN PROGRESS) — resume anchor
+
+Working on branch **`feature/engine-v1.4`** (tag **`engine-v1.3`** = frozen revert anchor: `git checkout
+engine-v1.3` to bail). The first **deliberate v1.4 un-freeze**. Sequence agreed 2026-06-26:
+**A2 → A1 v1.1 → A3 → A5 → A4 (H8/H12) → [clock decision] → A6 → A7.** Clock-model fork = **(b) deferred** —
+A6 is built clock-agnostic; the full clock model goes to the post-engine capabilities brainstorm (with
+"Settings & Preferences"). Each item committed atomically on the branch; **nothing pushed**.
+
+- ✅ **Versioning** — `engine-v1.3` tag + `CHANGELOG.md` (`2e27ed6`).
+- ✅ **A2** — `NEGATIVE_TIME_DELTA` lint + monotonic-time invariant; **H2 closed**; PROBE-B flipped (`1f4ed08`).
+- ✅ **A1 v1.1** — ancestor-aware + annotated contract checks (`Chapter.carriedRequired` / `Game.domains` /
+  `Game.mutexLatches`), cave contract populated, zero-FP (`c96529e`).
+- **239 tests green; typecheck clean.**
+
+**NEXT = A3** (node-named endings + atZero/out-of-time ending-honesty seams H3/H4/H5) → A5 → A4 H8/H12 →
+A6 (clock-agnostic) → A7. THEN the deferred **capabilities brainstorm** (task #9): six parked ideas —
+inventory, clue-finding/scene-exploration, free travel between locations, characters+locations as rich
+assets, an engine "Settings & Preferences" profile (chapter-vs-no-chapter, carry rules, **clock model**),
+and **As Dusk Falls-style** timed/skill challenges (narrative-native QTEs; mostly front-end). Each gets its
+own design pass AFTER the engine wrap-up.
+
+## Status — end of 2026-06-24 session (prior anchor)
 
 **DONE this session** (all container-side / content; engine FROZEN throughout; **232 tests green**):
 - ✅ **Hardening pass** — fuzzer + 4 team lenses → `HARDENING-FINDINGS.md` (H1–H16) + `harden/fuzz.test.ts`.

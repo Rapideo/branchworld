@@ -21,7 +21,14 @@ each resource's own time-function and clamped, an invariant independent of per-c
 The full clock-model design is deferred to the post-engine capabilities brainstorm (it belongs with the
 "Settings & Preferences" project profile).
 
-- _(nothing landed yet — this entry is the version marker that opens v1.4)_
+### Done so far on this branch
+- **A2 — `NEGATIVE_TIME_DELTA` lint + monotonic-time invariant** (`1f4ed08`, engine change). Closes the H2
+  rewind exploit: `add_minutes` can never move the clock backward; a negative delta is a lint error. Fuzzer
+  PROBE-B flipped from proving the exploit to proving the closure.
+- **A1 v1.1 — ancestor-aware + annotated cross-chapter contract checks** (`c96529e`, container-side, zero
+  engine change). `CONTRACT_READ_NO_ANCESTOR_PRODUCER` (the precise rename-catcher), `CONTRACT_DOMAIN_VIOLATION`,
+  `MUTEX_LATCH_UNGUARDED` — all **opt-in via author annotations** (`Chapter.carriedRequired`, `Game.domains`,
+  `Game.mutexLatches`), zero false positives. Cave contract populated. 239 tests green.
 
 ## [1.3.0] — 2026-06-24 — frozen baseline (tag `engine-v1.3`)
 

@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { lintStory, GameEngine } from '../../../engine';
 import { walkStateSpace } from '../../../engine/stateSpaceWalk';
+import { resolveEndingAt } from '../../../engine/endingResolver';
 import { ch2High } from './ch2High';
+
+const mkState = (vars: Record<string, boolean>) => ({
+  time: 0, location: 'high_rift', clues: [] as string[], inventory: [] as string[],
+  visited: [] as string[], completedEvents: [] as string[], vars,
+});
 
 describe('ch2_high — "The Dry High Traverse" (expanded)', () => {
   it('lints clean (no errors)', () => {
@@ -25,6 +31,19 @@ describe('ch2_high — "The Dry High Traverse" (expanded)', () => {
     const v = g.choose('c_climb_last');
     expect(v.endingReached?.id).toBe('end_grey_high');
     expect(v.state.vars.cave_someone_lost).toBe(false);
+  });
+
+  it('the benighted default fires when you never climbed out — not a false escape (F1/H4)', () => {
+    // past the deadline, never reached the shaft: cave_climbed_out false, lamp alive, no loss
+    const st = mkState({ cave_climbed_out: false, cave_dark_out: false, cave_hypothermic: false, cave_all_together: false, cave_someone_lost: false });
+    expect(resolveEndingAt(st, ch2High, undefined, undefined, true)?.id).toBe('end_benighted_high');
+  });
+
+  it('the surfacing endings require actually climbing out (F1)', () => {
+    const climbed = (extra: Record<string, boolean> = {}) =>
+      mkState({ cave_climbed_out: true, cave_dark_out: false, cave_hypothermic: false, cave_all_together: false, cave_someone_lost: false, ...extra });
+    expect(resolveEndingAt(climbed(), ch2High, undefined, undefined, false)?.id).toBe('end_grey_high');
+    expect(resolveEndingAt(climbed({ cave_all_together: true }), ch2High, undefined, undefined, false)?.id).toBe('end_daylight_all_three');
   });
 
   it('the slow rig is caught at the oxbow (present); crossing alone loses Rolly -> out, not whole', () => {

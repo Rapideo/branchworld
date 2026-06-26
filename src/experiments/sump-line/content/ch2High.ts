@@ -33,6 +33,7 @@ export const ch2High: Story = {
     { name: 'cave_all_together', type: 'boolean', default: false, purpose: 'Latching (carried from ch1): kept Rolly with you. Required by the clean ending.' },
     { name: 'cave_dark_out', type: 'boolean', default: false, purpose: 'Latching, paired with lamp at-zero. Required by the dark ending.' },
     { name: 'cave_hypothermic', type: 'boolean', default: false, purpose: 'Latching, paired with body_heat at-zero. Blocks the clean ending; colours others.' },
+    { name: 'cave_climbed_out', type: 'boolean', default: false, purpose: 'Latching: you climbed the exit shaft into daylight. Set only at n_climb; the surfacing endings require it so a deadline-cross below cannot claim the surface (F1/H4).' },
   ],
   locations: [
     { id: 'high_rift', name: 'The Aven Rift' },
@@ -311,7 +312,10 @@ export const ch2High: Story = {
       type: 'transition',
       location: 'daylight_shaft',
       resolvesEnding: true,
-      entryEffects: [{ field: 'location', op: 'change_location', value: 'daylight_shaft' }],
+      entryEffects: [
+        { field: 'location', op: 'change_location', value: 'daylight_shaft' },
+        { field: 'cave_climbed_out', op: 'set', value: 'true' }, // you reached and climbed the shaft (F1)
+      ],
       body:
         'You climb the last of it, hand over cold hand, toward whatever the shaft is going to give you — grey, or the memory of grey, or the dark catching you first.',
       choices: [],
@@ -339,6 +343,7 @@ export const ch2High: Story = {
       conditions: [
         { field: 'cave_someone_lost', op: 'is_true' },
         { field: 'cave_all_together', op: 'is_false' }, // mutex: a loss excludes "all three" — latch contract made explicit (A1 v1.1)
+        { field: 'cave_climbed_out', op: 'is_true' }, // you actually surfaced — not a deadline-cross below (F1)
       ],
       body:
         'You come up the last of the shaft into grey, and the grey is daylight, and the daylight is real. It is thin and cold and the most the hill has to give at {{time}}, but it is sky, and you climb out into it on hands and knees and lie in the wet heather with the rain on your face and breathe air that no rock has been sitting on. You made it. The cave let you have this.\n\n' +
@@ -350,12 +355,13 @@ export const ch2High: Story = {
       id: 'end_daylight_all_three',
       name: 'Daylight, All Three',
       summary: 'Out together, the lamp still burning, the cold beaten by a margin. The whole of the small victory.',
-      priority: 0,
+      priority: 1,
       conditions: [
         { field: 'cave_all_together', op: 'is_true' },
         { field: 'cave_someone_lost', op: 'is_false' }, // honesty: "all three" cannot fire if anyone was lost (H/F-E)
         { field: 'cave_dark_out', op: 'is_false' },
         { field: 'cave_hypothermic', op: 'is_false' },
+        { field: 'cave_climbed_out', op: 'is_true' }, // you actually surfaced (F1)
       ],
       body:
         'The shaft gives up its grey a hand’s breadth at a time, and then all at once it is not grey but daylight, watery and cold and absolutely real, and you come up out of the black slot in the hillside into the rain and the wind and the enormous ordinary sky.\n\n' +
@@ -368,13 +374,24 @@ export const ch2High: Story = {
       name: 'A Grey Way Out',
       summary: 'You surface — cold, shaken, the cost of it left unspoken. Out, but the cave kept something.',
       priority: 0,
-      isDefault: true,
-      conditions: [],
+      conditions: [{ field: 'cave_climbed_out', op: 'is_true' }], // you surfaced, but not the clean victory (F1)
       body:
         'You climb the last of the shaft on hands going stupid with cold and lungs full of stale cave air, and at the top of it there is grey — not much grey, the thin worn-out grey of a wet afternoon going toward dark, but grey, and it means sky, and it means out.\n\n' +
         'You haul yourself up into the rain and lie a while in the heather, breathing, the black slot of the cave at your back. The lamp still gives its small tired disc, dimmer than it was, the dark beaten by a margin you would rather not measure. You are out. That is the fact you hold onto, because some of the other facts of the afternoon are heavier and you are too cold to lift them yet.\n\n' +
         'If there is anyone beside you in the heather, you do not say anything; you just lie there together being out. If there is not, the rain falls on you alone and you let it. The cave behind you neither mourns nor celebrates; it rose and it sealed on its own clock, and now it is quiet, and it will be quiet a long time.\n\n' +
         'There will be a phone, and a kettle, and people. Later. For now there is the grey sky and the cold rain and the enormous fact of being out of the dark, and that, for the moment, is enough, and has to be.',
+    },
+    {
+      id: 'end_benighted_high',
+      name: 'The Day Goes Without You',
+      summary: 'You did not reach the shaft in time. The afternoon fails overhead, and you are still below, in the cave that does not hurry.',
+      priority: 0,
+      isDefault: true,
+      conditions: [],
+      body:
+        'You do not reach the daylight shaft. Not in time — not while there is still an afternoon up there to climb toward. The cave is long, and you spent what the cave gave you, and somewhere above the grey is going out of the sky a degree at a time, and you are not there to see it go.\n\n' +
+        'Wherever the cave has you when the day fails — a ledge, a crawl, the cold lip of a pitch — that is where you are. The lamp still throws its small disc, for now. The water still moves somewhere on its own clock. The rock holds the cold it has held since before the hill had a name, and presses it patiently into you, and has all the time there is to do it.\n\n' +
+        'You did not get out. That is the fact, and it is a heavy one, and the cave does not help you lift it. There will be a call-out when the surface notices the not-coming-back — lights, ropes, people who do this; maybe in time, maybe not. The mountain keeps its own counsel on that. The dark keeps you, and neither of them is in any hurry at all.',
     },
   ],
 };

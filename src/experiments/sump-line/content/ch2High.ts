@@ -336,7 +336,10 @@ export const ch2High: Story = {
       name: 'Out, But Not Whole',
       summary: 'You climb out into the rain — and not in any way you wanted. Rolly is behind the water.',
       priority: 1,
-      conditions: [{ field: 'cave_someone_lost', op: 'is_true' }],
+      conditions: [
+        { field: 'cave_someone_lost', op: 'is_true' },
+        { field: 'cave_all_together', op: 'is_false' }, // mutex: a loss excludes "all three" — latch contract made explicit (A1 v1.1)
+      ],
       body:
         'You come up the last of the shaft into grey, and the grey is daylight, and the daylight is real. It is thin and cold and the most the hill has to give at {{time}}, but it is sky, and you climb out into it on hands and knees and lie in the wet heather with the rain on your face and breathe air that no rock has been sitting on. You made it. The cave let you have this.\n\n' +
         'It did not let you have all of it. Rolly is not beside you. Somewhere back in the dark, on the wrong side of water that rose when water rises and did not care whose side anyone was on, Rolly is behind you — left, lost, cut off, the particular shape of it your own to carry. You climbed out lighter than you went in, and not in any way you wanted.\n\n' +

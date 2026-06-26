@@ -489,9 +489,9 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
   });
 
   // PROBE-C: an atZero ending short-circuits the priority resolver.
-  // Proves systems-finding S5: the resource at-zero ending fires BEFORE resolveEnding, so a
-  // lower-priority dark ending preempts a higher-priority state-matched ending.
-  it('PROBE-C: an atZero ending preempts a higher-priority ending the state actually matches', () => {
+  // PROBE-C (CLOSED by A3): the atZero ending no longer short-circuits — it competes by priority, so the
+  // higher-priority state-matched ending now wins. Was systems-finding S5 / H3.
+  it('PROBE-C (closed): an atZero ending competes by priority; the higher-priority state ending wins (H3 fixed)', () => {
     const story: Story = {
       id: 'probe_atzero',
       title: 'AtZero',
@@ -527,12 +527,35 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
     const eng = new GameEngine(story);
     eng.start();
     const end = eng.choose('c_cross'); // lamp 10 → 0 at +10..15; crossed=true
-    // The engine resolves the DARK ending (atZero short-circuit), even though...
-    expect(end.endingReached?.id).toBe('e_dark');
-    // ...the priority resolver over the SAME final state would pick the higher-priority grey ending.
+    // The engine now resolves the higher-priority GREY ending (atZero competes, no longer short-circuits)...
+    expect(end.endingReached?.id).toBe('e_grey');
+    // ...matching what the priority resolver over the same final state intends.
     const byPriority = resolveEnding(end.state, story);
     expect(byPriority?.id).toBe('e_grey');
-    expect(end.endingReached?.id).not.toBe(byPriority?.id); // engine outcome ≠ priority intent
+    expect(end.endingReached?.id).toBe(byPriority?.id); // engine outcome == priority intent
+  });
+
+  // PROBE-F (A3): a node-named ending (endsWith) resolves through the engine end-to-end, overriding the
+  // state resolver (which would pick the default here). Proves the F8 wiring.
+  it('PROBE-F: a resolvesEnding node with endsWith resolves to the named ending end-to-end', () => {
+    const story: Story = {
+      id: 'probe_named', title: 'Named', startNodeId: 'n0', startTime: '08:00', deadline: '08:30',
+      startLocation: 'loc_a', variables: [{ name: 'crossed', type: 'boolean', default: false, purpose: 'x' }],
+      locations: [{ id: 'loc_a', name: 'A' }], events: [],
+      nodes: [
+        { id: 'n0', title: 's', body: '', choices: [{ id: 'c', label: 'go', destination: 'n_end', effects: [{ field: 'time', op: 'add_minutes', value: '30' }] }] },
+        { id: 'n_end', title: 'e', body: '', choices: [], resolvesEnding: true, endsWith: 'e_special' },
+      ],
+      endings: [
+        { id: 'e_default', name: 'D', conditions: [], summary: '', isDefault: true },
+        { id: 'e_special', name: 'Special', conditions: [{ field: 'crossed', op: 'is_true' }], summary: '', priority: 0 },
+      ],
+    };
+    expect(lintStory(story).errors).toEqual([]);
+    const eng = new GameEngine(story);
+    eng.start();
+    const end = eng.choose('c'); // crossed never set -> state resolver would pick e_default; endsWith forces e_special
+    expect(end.endingReached?.id).toBe('e_special');
   });
 
   // PROBE-D: the coercion asymmetry behind silent cross-chapter contract drift.

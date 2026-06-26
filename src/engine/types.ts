@@ -47,6 +47,7 @@ export interface StoryNode {
   entryEffects?: Effect[];
   choices: Choice[];
   resolvesEnding?: boolean;     // entering this node triggers the ending resolver
+  endsWith?: string;            // A3/F8: resolve directly to this ending id (node-named), overriding the state resolver
   authorTimeHint?: string;      // editor-only; engine never reads this for logic
   repeatable?: boolean;
   tags?: string[];
@@ -125,6 +126,7 @@ export interface Story {
   events: ScheduledEvent[];
   endings: Ending[];            // ordered; exactly one isDefault with empty conditions
   resources?: Resource[];
+  outOfTimeEndingId?: string;   // A3/H4: distinct "the clock chose" ending when the deadline forces resolution with no match
 }
 
 export interface WorldState {

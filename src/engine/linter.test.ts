@@ -169,6 +169,27 @@ describe('linter', () => {
   });
 });
 
+describe('A3 — node-named + out-of-time ending references', () => {
+  it('NODE_ENDING_MISSING — a node endsWith an ending that does not exist', () => {
+    const s = clean();
+    s.nodes[1].endsWith = 'ghost_ending';
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('NODE_ENDING_MISSING');
+  });
+  it('OUT_OF_TIME_ENDING_MISSING — outOfTimeEndingId references a missing ending', () => {
+    const s = clean();
+    s.outOfTimeEndingId = 'ghost_ending';
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('OUT_OF_TIME_ENDING_MISSING');
+  });
+  it('does NOT flag a valid endsWith / outOfTimeEndingId (no false positive)', () => {
+    const s = clean();
+    s.nodes[1].endsWith = 'win';
+    s.outOfTimeEndingId = 'win';
+    const codes = lintStory(s).errors.map((e) => e.code);
+    expect(codes).not.toContain('NODE_ENDING_MISSING');
+    expect(codes).not.toContain('OUT_OF_TIME_ENDING_MISSING');
+  });
+});
+
 describe('NEGATIVE_TIME_DELTA — time is monotonic (H2)', () => {
   it('flags an add_minutes effect with a negative value', () => {
     const s = clean();

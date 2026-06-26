@@ -246,6 +246,16 @@ export function lintStory(story: Story): LintResult {
     err('DEFAULT_HAS_CONDITIONS', 'Default ending must have no conditions');
   }
 
+  // A3 — node-named endings (F8) + the out-of-time ending (H4) must reference real endings
+  for (const n of story.nodes) {
+    if (n.endsWith && !endingIds.has(n.endsWith)) {
+      err('NODE_ENDING_MISSING', `Node ${n.id} endsWith '${n.endsWith}' which is not a defined ending`, n.id);
+    }
+  }
+  if (story.outOfTimeEndingId && !endingIds.has(story.outOfTimeEndingId)) {
+    err('OUT_OF_TIME_ENDING_MISSING', `outOfTimeEndingId '${story.outOfTimeEndingId}' is not a defined ending`);
+  }
+
   // overlap/shadow warnings — warn when we cannot prove two non-default endings are mutually exclusive
   const nonDefault = story.endings.filter((e) => !e.isDefault);
   for (let i = 0; i < nonDefault.length; i++) {

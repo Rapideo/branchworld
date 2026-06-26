@@ -15,7 +15,7 @@
 | **H6, H7** (+ the F-C/F-E content incoherences) | **Fixed** | B1 (commit `7402474`), validated CLOSED by two team agents. |
 | **F4, F7** (carry-only endings unverifiable; resource calibration by hand) | **Addressed (core)** | A4 seeded walker + value-at-endings (`seededWalk.ts`, commit `74cf36d`). |
 | **H2** (negative-time exploit) | **✅ Closed (A2, v1.4)** | `NEGATIVE_TIME_DELTA` lint + monotonic-time invariant (`effects.ts`/`linter.ts`); fuzzer PROBE-B flipped to prove the closure. |
-| **H3, H4, H5** (atZero short-circuit; deadline voids choice; default-ending hedge) | **Open** — deliberate v1.4 | A3 node-named endings (engine change). |
+| **H3, H4, H5** (atZero short-circuit; deadline voids choice; default-ending hedge) | **✅ Engine done (A3 `resolveEndingAt`)** | Unified precedence: node-named `endsWith` (F8) > priority[state + atZero] (H3 closed, PROBE-C flipped) > `outOfTimeEndingId` (H4) > default. H5 "fan the default" = content follow-on riding on `endsWith`. |
 | **H8, H10, H11, H12** (present/per-branch reachability; cap driver; calibration coupling) | **Partly open** | A4 covers F4/F7; present/per-branch reachability + bucketing still to add. |
 | **H9** (walker must scale) | **Demonstrated in practice** | ch1 exhaustive walk is ~53k states (>50k default); raised that test's cap. Seeded walk (A4) is the first half; a scalable/bucketed walk (A7) is the rest. |
 | **H14–H16** (craft: earning detours, false choices, rhythm) | **Open** — no un-freeze | WS-B method/craft work. |

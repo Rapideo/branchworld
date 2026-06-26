@@ -125,7 +125,7 @@ export function lintStory(story: Story): LintResult {
 
   // no-exit nodes + soft-lock detection
   for (const n of story.nodes) {
-    if (n.resolvesEnding) continue;
+    if (n.resolvesEnding || n.endsWith) continue; // an endsWith node resolves (F3), so it needs no choices
     const choices = n.choices ?? [];
     if (choices.length === 0) {
       err('NO_EXIT', `Node ${n.id} has no choices and does not resolve an ending`, n.id);

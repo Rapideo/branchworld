@@ -19,14 +19,19 @@ export function resolveEndingAt(
   atZeroEndingId: string | undefined,
   pastDeadline: boolean,
 ): Ending | undefined {
-  // 1. Node-named ending — the author pinned this node's outcome (F8). Wins outright.
-  if (node?.endsWith) {
+  // 1. Node-named ending — the author pinned this node's outcome (F8). Wins outright over state, but NOT
+  //    over a resource death: a death (atZero) is a hard physical fact, so it beats the pin (F3 decision).
+  if (node?.endsWith && !atZeroEndingId) {
     const named = story.endings.find((e) => e.id === node.endsWith);
     if (named) return named;
   }
-  // 2. Priority over state-matched endings + the atZero ending, competing together (H3: no short-circuit).
+  // 2. Priority over state-matched endings + the atZero death, competing together (H3: no short-circuit;
+  //    F2 enforces the death out-ranks any co-occurring ending). The out-of-time ending is NOT a state
+  //    candidate here — it fires only via the deadline path below, so it may be condition-free.
   const candidates = story.endings.filter(
-    (e) => !e.isDefault && (e.id === atZeroEndingId || evaluateConditions(e.conditions, s)),
+    (e) =>
+      !e.isDefault && e.id !== story.outOfTimeEndingId &&
+      (e.id === atZeroEndingId || evaluateConditions(e.conditions, s)),
   );
   if (candidates.length) {
     return candidates.reduce((best, e) => ((e.priority ?? 0) > (best.priority ?? 0) ? e : best));

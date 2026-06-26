@@ -59,7 +59,7 @@ export class GameEngine {
     // Unified ending resolution (A3): node-named (F8) > priority[state + atZero] (H3) > out-of-time (H4)
     // > default. atZero no longer short-circuits — it competes by priority with state-matched endings.
     const pastDeadline = this.state.time >= this.deadline;
-    if (!this.ending && (n.resolvesEnding || rstep.atZeroEndingId || pastDeadline)) {
+    if (!this.ending && (n.resolvesEnding || n.endsWith || rstep.atZeroEndingId || pastDeadline)) {
       this.ending = resolveEndingAt(this.state, this.story, n, rstep.atZeroEndingId, pastDeadline);
       if (this.ending) this.log.push(`Ending: ${this.ending.id}`);
     }

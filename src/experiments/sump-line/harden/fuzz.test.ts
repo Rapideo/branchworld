@@ -538,16 +538,21 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
     expect(end.endingReached?.id).toBe(byPriority?.id); // engine outcome == priority intent
   });
 
-  // PROBE-F (A3): a node-named ending (endsWith) resolves through the engine end-to-end, overriding the
-  // state resolver (which would pick the default here). Proves the F8 wiring.
-  it('PROBE-F: a resolvesEnding node with endsWith resolves to the named ending end-to-end', () => {
+  // PROBE-F (A3 + F3): a node with endsWith and NO resolvesEnding still resolves — endsWith is a resolution
+  // trigger (the F3 wiring fix) — to the named ending even though the state resolver would pick the default.
+  // The node is reached well before the deadline, so endsWith is the ONLY trigger.
+  it('PROBE-F: a node with endsWith (no resolvesEnding) triggers resolution to the named ending', () => {
     const story: Story = {
-      id: 'probe_named', title: 'Named', startNodeId: 'n0', startTime: '08:00', deadline: '08:30',
+      id: 'probe_named', title: 'Named', startNodeId: 'n0', startTime: '08:00', deadline: '12:00',
       startLocation: 'loc_a', variables: [{ name: 'crossed', type: 'boolean', default: false, purpose: 'x' }],
       locations: [{ id: 'loc_a', name: 'A' }], events: [],
       nodes: [
-        { id: 'n0', title: 's', body: '', choices: [{ id: 'c', label: 'go', destination: 'n_end', effects: [{ field: 'time', op: 'add_minutes', value: '30' }] }] },
-        { id: 'n_end', title: 'e', body: '', choices: [], resolvesEnding: true, endsWith: 'e_special' },
+        { id: 'n0', title: 's', body: '', choices: [
+          { id: 'c', label: 'go', destination: 'n_end', effects: [{ field: 'time', op: 'add_minutes', value: '30' }] },
+          { id: 'c_long', label: 'long', destination: 'n_long', effects: [{ field: 'time', op: 'add_minutes', value: '240' }] },
+        ] },
+        { id: 'n_end', title: 'e', body: '', choices: [], endsWith: 'e_special' }, // no resolvesEnding -> endsWith must trigger
+        { id: 'n_long', title: 'l', body: '', choices: [], resolvesEnding: true },
       ],
       endings: [
         { id: 'e_default', name: 'D', conditions: [], summary: '', isDefault: true },
@@ -557,7 +562,7 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
     expect(lintStory(story).errors).toEqual([]);
     const eng = new GameEngine(story);
     eng.start();
-    const end = eng.choose('c'); // crossed never set -> state resolver would pick e_default; endsWith forces e_special
+    const end = eng.choose('c'); // time 08:30, well before 12:00; crossed unset -> state picks default; endsWith forces e_special
     expect(end.endingReached?.id).toBe('e_special');
   });
 

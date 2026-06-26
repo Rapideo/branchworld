@@ -116,4 +116,23 @@ describe('resolveEndingAt — node-named, atZero-by-priority, out-of-time (A3)',
     ]), outOfTimeEndingId: 'oot' };
     expect(resolveEndingAt(s({ score: 9 }), story, mkNode({ resolvesEnding: true }), undefined, true)?.id).toBe('win');
   });
+
+  it('a resource death beats a node-named pin — death wins regardless of priority (F3)', () => {
+    const story = storyWith([
+      { id: 'pin', name: 'Pin', summary: '', conditions: [{ field: 'nope', op: 'is_true' }], priority: 9 },
+      { id: 'death', name: 'Death', summary: '', conditions: [{ field: 'dead', op: 'is_true' }], priority: 1 },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]);
+    // node pins 'pin' (pri 9) but the lamp died → 'death' (pri 1) wins anyway
+    expect(resolveEndingAt(s({ dead: 1 }), story, mkNode({ endsWith: 'pin' }), 'death', false)?.id).toBe('death');
+  });
+
+  it('the out-of-time ending never fires as a state match — only via the deadline path (F3)', () => {
+    const story: Story = { ...storyWith([
+      { id: 'oot', name: 'OOT', summary: '', conditions: [], priority: 9 }, // empty conditions would otherwise always match
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]), outOfTimeEndingId: 'oot' };
+    // not past the deadline → oot must NOT fire by state match; falls to default
+    expect(resolveEndingAt(s({}), story, mkNode({ resolvesEnding: true }), undefined, false)?.id).toBe('default');
+  });
 });

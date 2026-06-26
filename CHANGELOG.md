@@ -29,6 +29,18 @@ The full clock-model design is deferred to the post-engine capabilities brainsto
   engine change). `CONTRACT_READ_NO_ANCESTOR_PRODUCER` (the precise rename-catcher), `CONTRACT_DOMAIN_VIOLATION`,
   `MUTEX_LATCH_UNGUARDED` — all **opt-in via author annotations** (`Chapter.carriedRequired`, `Game.domains`,
   `Game.mutexLatches`), zero false positives. Cave contract populated. 239 tests green.
+- **A3 — node-named endings + unified ending resolution** (`2cac20e`, engine change). `StoryNode.endsWith`
+  (F8), atZero competes by priority instead of short-circuiting (H3), `Story.outOfTimeEndingId` (H4), all
+  unified in `resolveEndingAt`. Fuzzer PROBE-C flipped to prove the H3 closure.
+- **Team-pass follow-ups F1–F6** (`bf2bbc7`, `ce21b75`, `62fedbe`, `98a8b87`). A 3-lens adversarial review of
+  the v1.4 delta found one confirmed live bug + seam gaps; all P0/P1 fixes landed:
+  - **F1** (content): ch2_high's default no longer falsely claims escape — a `cave_climbed_out` latch gates the
+    surfacing endings; an honest benighted default fires on a deadline-cross below the shaft.
+  - **F2** `ATZERO_PRIORITY_DOMINANCE` (lint): every resource death must out-rank any ending it can co-occur with.
+  - **F3**: `endsWith` is now a resolution trigger; a resource death always beats a node-named pin; the
+    out-of-time ending is excluded from state-matching (so it may be condition-free).
+  - **F4** `CONTRACT_UNKNOWN_ANNOTATION`, **F5** `OUT_OF_TIME_HAS_CONDITIONS`, **F6** `ENDSWITH_WITH_LIVE_CHOICES`.
+  259 tests green; typecheck clean.
 
 ## [1.3.0] — 2026-06-24 — frozen baseline (tag `engine-v1.3`)
 

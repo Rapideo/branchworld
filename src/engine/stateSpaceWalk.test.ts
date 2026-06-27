@@ -93,3 +93,28 @@ describe('walkStateSpace — present-reachability (H8) + per-branch reachability
     expect(r.conditionalChoices).not.toContain('m::c_open'); // always available
   });
 });
+
+describe('walkStateSpace — time-bucketing mode (H10/A7)', () => {
+  function hubStory(): Story {
+    return {
+      id: 'hub', title: 'hub', startNodeId: 'a', startTime: '15:00', deadline: '18:00', startLocation: 'L',
+      variables: [], locations: [{ id: 'L', name: 'L' }], events: [],
+      nodes: [
+        { id: 'a', title: 'A', body: '', choices: [
+          { id: 'x', label: 'x', destination: 'hub', effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
+          { id: 'y', label: 'y', destination: 'hub', effects: [{ field: 'time', op: 'add_minutes', value: '20' }] },
+        ] },
+        { id: 'hub', title: 'Hub', body: '', choices: [
+          { id: 'go', label: 'go', destination: 'end', effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
+        ] },
+        { id: 'end', title: 'E', body: '', choices: [], resolvesEnding: true },
+      ],
+      endings: [{ id: 'd', name: 'D', summary: '', conditions: [], isDefault: true }],
+    } as unknown as Story;
+  }
+  it('collapses distinct-time hub states into one bucket (fewer states explored)', () => {
+    const exact = walkStateSpace(hubStory());
+    const bucketed = walkStateSpace(hubStory(), { timeBucket: 30 }); // the two arrivals (t+10, t+20) share one 30-min bucket
+    expect(bucketed.statesExplored).toBeLessThan(exact.statesExplored);
+  });
+});

@@ -25,13 +25,15 @@ interface WNode {
 }
 
 // Canonical key: currentId + every piece of WorldState, with set-like arrays sorted.
-function keyOf(n: WNode): string {
+function keyOf(n: WNode, timeBucket?: number): string {
   const s = n.snap.state;
   const sortArr = (a: string[]) => [...a].sort();
   return JSON.stringify({
     id: n.snap.currentId,
     ending: n.snap.endingId ?? null,
-    time: s.time,
+    // H10: distinct accumulated time at reconverging hubs is the real cap driver. The optional timeBucket
+    // mode quantizes time so same-bucket arrivals collapse (lossless when detour costs are bucket multiples).
+    time: timeBucket ? Math.floor(s.time / timeBucket) : s.time,
     location: s.location,
     clues: sortArr(s.clues),
     inventory: sortArr(s.inventory),
@@ -64,7 +66,7 @@ interface WalkResult {
   parent: Map<string, { prevKey: string; choiceId: string } | null>;
 }
 
-function walk(story: Story, cap: number): WalkResult {
+function walk(story: Story, cap: number, timeBucket?: number): WalkResult {
   const visited = new Map<string, WNode>();
   const parent = new Map<string, { prevKey: string; choiceId: string } | null>();
   const terminals: WNode[] = [];
@@ -77,7 +79,7 @@ function walk(story: Story, cap: number): WalkResult {
   let capHit = false;
 
   const start = snapAt(story, null);
-  const startKey = keyOf(start);
+  const startKey = keyOf(start, timeBucket);
   visited.set(startKey, start);
   parent.set(startKey, null);
   const queue: WNode[] = [start];
@@ -85,7 +87,7 @@ function walk(story: Story, cap: number): WalkResult {
   while (queue.length) {
     if (visited.size >= cap) { capHit = true; break; }
     const cur = queue.shift()!;
-    const curKey = keyOf(cur);
+    const curKey = keyOf(cur, timeBucket);
     reachedNodes.add(cur.snap.currentId);
 
     const ended = cur.view.endingReached;
@@ -113,7 +115,7 @@ function walk(story: Story, cap: number): WalkResult {
     for (const ch of available) {
       exercisedChoices.add(`${cur.snap.currentId}::${ch.id}`);
       const next = snapAt(story, cur, ch.id);
-      const nextKey = keyOf(next);
+      const nextKey = keyOf(next, timeBucket);
       if (!visited.has(nextKey)) {
         visited.set(nextKey, next);
         parent.set(nextKey, { prevKey: curKey, choiceId: ch.id });
@@ -167,9 +169,9 @@ function checkEventRecovery(w: WalkResult) {
   return w.story.events.map((ev) => ({ eventId: ev.id, ok: w.reachedNodes.has(ev.recoveryNodeId) }));
 }
 
-export function walkStateSpace(story: Story, opts?: { cap?: number }): WalkReport {
+export function walkStateSpace(story: Story, opts?: { cap?: number; timeBucket?: number }): WalkReport {
   const cap = opts?.cap ?? DEFAULT_CAP;
-  const w = walk(story, cap);
+  const w = walk(story, cap, opts?.timeBucket);
   return {
     statesExplored: w.visited.size,
     capHit: w.capHit,

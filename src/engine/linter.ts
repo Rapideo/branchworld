@@ -293,6 +293,25 @@ export function lintStory(story: Story): LintResult {
     if ((ev.trigger?.length ?? 0) === 0) err('EVENT_NO_TRIGGER', `Event ${ev.id} has no trigger`, ev.id);
   }
 
+  // EVENT_PRESENT_NODE_ON_DEMAND (H6) — a non-event choice routing into an event's ifPresentNode that carries
+  // entry effects (a consequence) lets the player trigger that consequence on demand, bypassing the event's
+  // timing (the "looking seals the cave early" bug). A present-consequence node must be reached ONLY by the event.
+  const nodeById = new Map(story.nodes.map((n) => [n.id, n]));
+  const presentConsequence = new Map<string, string>(); // present-node id -> event id
+  for (const ev of story.events) {
+    const pn = nodeById.get(ev.ifPresentNode);
+    if (pn && (pn.entryEffects?.length ?? 0) > 0) presentConsequence.set(ev.ifPresentNode, ev.id);
+  }
+  for (const n of story.nodes) {
+    for (const c of n.choices ?? []) {
+      const evId = presentConsequence.get(c.destination);
+      if (evId) {
+        err('EVENT_PRESENT_NODE_ON_DEMAND',
+          `Choice ${c.id} (node ${n.id}) routes into event ${evId}'s present node '${c.destination}', which has entry effects — its consequence fires on demand, bypassing the event timing`, n.id);
+      }
+    }
+  }
+
   // time-literal range: every time_* condition/trigger value must sit in [startTime, deadline]
   const startMin = parseTime(story.startTime);
   const deadlineMin = parseTime(story.deadline);

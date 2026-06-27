@@ -26,9 +26,11 @@ A6 is built clock-agnostic; the full clock model goes to the post-engine capabil
 - ✅ **Team adversarial pass + ALL P0/P1 follow-ups (F1–F6)** — found one CONFIRMED live cave bug + seam gaps;
   fixed: **F1** ch2_high honesty (the live bug), **F2** `ATZERO_PRIORITY_DOMINANCE`, **F3** endsWith-trigger +
   death-beats-pin, **F4/F5/F6** coherence lints (`bf2bbc7`/`ce21b75`/`62fedbe`/`98a8b87`).
-- **259 tests green; typecheck clean.**
+- ✅ **A5** — `EVENT_PRESENT_NODE_ON_DEMAND` lint (H6 regression guard) + a conditional-trigger regression lock
+  (H7 — conditional triggers are already engine-supported; B1 used them).
+- **261 tests green; typecheck clean.**
 
-**NEXT = A5** (event-hygiene lint + conditional triggers H6/H7) → A4 H8/H12 → A6 (clock-agnostic) → A7.
+**NEXT = A4 H8/H12** (present + per-branch reachability in the seeded walker) → A6 (clock-agnostic) → A7.
 Remaining team-pass items are **P2** (F8 transition-aware producer check, F9 domain-FP trim, F10
 chapter-deadline-OOT lint, F11 precedence docs) — fold in or do at the pre-merge Team check. THEN the deferred
 **capabilities brainstorm** (task #9): six parked ideas —

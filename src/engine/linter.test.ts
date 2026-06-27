@@ -73,6 +73,13 @@ describe('linter', () => {
     expect(lintStory(s).errors.some((e) => e.code === 'EVENT_RECOVERY_MISSING')).toBe(true);
   });
 
+  it('EVENT_PRESENT_NODE_ON_DEMAND — a choice routes into an event present node that has entry effects (H6/A5)', () => {
+    const s = clean();
+    // node 'b' is the event ifPresentNode AND the 'go' choice's destination; give it a consequence (entry effect)
+    s.nodes[1].entryEffects = [{ field: 'knows', op: 'set', value: 'true' }];
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('EVENT_PRESENT_NODE_ON_DEMAND');
+  });
+
   it('flags a clock that cannot bite', () => {
     const s = clean();
     s.nodes[0].choices[0].effects = [{ field: 'time', op: 'add_minutes', value: '5' }]; // max path is 5 min, well under the 90-min window

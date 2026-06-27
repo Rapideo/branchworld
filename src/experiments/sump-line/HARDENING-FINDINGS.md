@@ -12,7 +12,7 @@
 | Finding(s) | Status | How |
 |---|---|---|
 | **H1, H13** (silent cross-chapter drift; latch discipline) | **Addressed (v1)** | A1 contract+latch linter (`lintGameContracts.ts`, commit `0c1558d`) — `CONTRACT_TYPE_MISMATCH`, `CONTRACT_READ_NO_PRODUCER`, `CONTRACT_DOMAIN_DRIFT`, `LATCH_IN_CHOICE_EFFECT`. *Ancestor-aware `READ_NO_ANCESTOR_PRODUCER` + `DOMAIN_VIOLATION` + `MUTEX_LATCH_UNGUARDED` = A1 v1.1 (DONE `c96529e`, annotation-gated).* |
-| **H6, H7** (+ the F-C/F-E content incoherences) | **Fixed** | B1 (commit `7402474`), validated CLOSED by two team agents. |
+| **H6, H7** (+ the F-C/F-E content incoherences) | **Fixed + lint-guarded (A5)** | B1 content (`7402474`); A5 adds `EVENT_PRESENT_NODE_ON_DEMAND` lint (H6 regression guard) + a conditional-trigger regression lock (H7 — the engine already evaluates the full trigger). |
 | **F4, F7** (carry-only endings unverifiable; resource calibration by hand) | **Addressed (core)** | A4 seeded walker + value-at-endings (`seededWalk.ts`, commit `74cf36d`). |
 | **H2** (negative-time exploit) | **✅ Closed (A2, v1.4)** | `NEGATIVE_TIME_DELTA` lint + monotonic-time invariant (`effects.ts`/`linter.ts`); fuzzer PROBE-B flipped to prove the closure. |
 | **H3, H4, H5** (atZero short-circuit; deadline voids choice; default-ending hedge) | **✅ Engine done (A3 `resolveEndingAt`)** | Unified precedence: node-named `endsWith` (F8) > priority[state + atZero] (H3 closed, PROBE-C flipped) > `outOfTimeEndingId` (H4) > default. H5 "fan the default" = content follow-on riding on `endsWith`. |

@@ -14,6 +14,8 @@ export interface WalkReport {
   orphanEndings: string[];
   deadChoices: string[];
   eventRecovery: { eventId: string; ok: boolean }[];
+  eventPresent: { eventId: string; ok: boolean }[]; // H8: the ifPresentNode is reached (as present) in some play
+  conditionalChoices: string[]; // H12: choices available on some reachable branches and locked on others (`node::choice`)
   overlaps: { winner: string; shadowed: string[]; count: number }[];
 }
 
@@ -54,6 +56,7 @@ interface WalkResult {
   terminals: WNode[];
   capHit: boolean;
   exercisedChoices: Set<string>; // `${nodeId}::${choiceId}` taken from an AVAILABLE state
+  choiceAvail: Map<string, { available: number; locked: number }>; // per `${nodeId}::${choiceId}`, across reached visits
   reachedNodes: Set<string>;
   reachedEndings: Set<string>;
   softlocks: WNode[];
@@ -66,6 +69,7 @@ function walk(story: Story, cap: number): WalkResult {
   const parent = new Map<string, { prevKey: string; choiceId: string } | null>();
   const terminals: WNode[] = [];
   const exercisedChoices = new Set<string>();
+  const choiceAvail = new Map<string, { available: number; locked: number }>();
   const reachedNodes = new Set<string>();
   const reachedEndings = new Set<string>();
   const softlocks: WNode[] = [];
@@ -93,6 +97,13 @@ function walk(story: Story, cap: number): WalkResult {
     }
 
     const available = cur.view.choices.filter((c) => c.available);
+    // H12: tally per-choice availability across every reached visit to this node (available vs locked).
+    for (const c of cur.view.choices) {
+      const k = `${cur.snap.currentId}::${c.id}`;
+      const rec = choiceAvail.get(k) ?? { available: 0, locked: 0 };
+      if (c.available) rec.available++; else rec.locked++;
+      choiceAvail.set(k, rec);
+    }
     if (available.length === 0) {
       // No ending, no available choice => genuine soft-lock
       softlocks.push(cur);
@@ -113,7 +124,7 @@ function walk(story: Story, cap: number): WalkResult {
     if (capHit) break;
   }
 
-  return { story, visited, terminals, capHit, exercisedChoices, reachedNodes, reachedEndings, softlocks, zeroEnding, parent };
+  return { story, visited, terminals, capHit, exercisedChoices, choiceAvail, reachedNodes, reachedEndings, softlocks, zeroEnding, parent };
 }
 
 // EE-3 overlap: two non-default endings simultaneously satisfiable on a reachable
@@ -168,6 +179,11 @@ export function walkStateSpace(story: Story, opts?: { cap?: number }): WalkRepor
     orphanEndings: findOrphanEndings(w),
     deadChoices: findDeadChoices(w),
     eventRecovery: checkEventRecovery(w),
+    eventPresent: w.story.events.map((ev) => ({ eventId: ev.id, ok: w.reachedNodes.has(ev.ifPresentNode) })),
+    conditionalChoices: [...w.choiceAvail.entries()]
+      .filter(([, v]) => v.available > 0 && v.locked > 0)
+      .map(([k]) => k)
+      .sort(),
     overlaps: findEndingAmbiguities(w),
   };
 }

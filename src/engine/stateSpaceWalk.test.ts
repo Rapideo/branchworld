@@ -40,3 +40,56 @@ describe('walkStateSpace — resources stay tractable', () => {
     expect(report.orphanEndings).toEqual([]); // dark (slow) + out (fast) both reachable
   });
 });
+
+describe('walkStateSpace — present-reachability (H8) + per-branch reachability (H12)', () => {
+  // an event at L2 after 15:30; the player either detours to L2 (present reachable) or waits at L1 (not).
+  function presentStory(reachPresent: boolean): Story {
+    return {
+      id: 'ev', title: 'ev', startNodeId: 'a', startTime: '15:00', deadline: '17:00', startLocation: 'L1',
+      variables: [{ name: 'seen', type: 'boolean', default: false, purpose: 's' }],
+      locations: [{ id: 'L1', name: 'L1' }, { id: 'L2', name: 'L2' }],
+      events: [{
+        id: 'E', title: 'E', trigger: [{ field: 'time', op: 'time_after', value: '15:30' }],
+        eventLocation: 'L2', ifPresentNode: 'n_present',
+        ifAbsentEffects: [{ field: 'seen', op: 'set', value: 'true' }], recoveryNodeId: 'n_rec',
+      }],
+      nodes: [
+        { id: 'a', title: 'A', body: '', choices: reachPresent
+          ? [{ id: 'go', label: 'to L2', destination: 'n_rec', effects: [{ field: 'location', op: 'change_location', value: 'L2' }, { field: 'time', op: 'add_minutes', value: '40' }] }]
+          : [{ id: 'wait', label: 'wait', destination: 'n_rec', effects: [{ field: 'time', op: 'add_minutes', value: '60' }] }] },
+        { id: 'n_present', title: 'P', body: '', choices: [], resolvesEnding: true },
+        { id: 'n_rec', title: 'R', body: '', choices: [], resolvesEnding: true },
+      ],
+      endings: [{ id: 'd', name: 'D', summary: '', conditions: [], isDefault: true }],
+    } as unknown as Story;
+  }
+  it('H8: flags an event whose present node no play reaches (eventPresent ok=false)', () => {
+    expect(walkStateSpace(presentStory(false)).eventPresent.find((e) => e.eventId === 'E')!.ok).toBe(false);
+  });
+  it('H8: an event whose present node IS reachable shows eventPresent ok=true', () => {
+    expect(walkStateSpace(presentStory(true)).eventPresent.find((e) => e.eventId === 'E')!.ok).toBe(true);
+  });
+
+  it('H12: surfaces a choice available on one branch and locked on another (conditionalChoices)', () => {
+    const story = {
+      id: 'br', title: 'br', startNodeId: 'a', startTime: '15:00', deadline: '17:00', startLocation: 'L',
+      variables: [{ name: 'flag', type: 'boolean', default: false, purpose: 'f' }],
+      locations: [{ id: 'L', name: 'L' }], events: [],
+      nodes: [
+        { id: 'a', title: 'A', body: '', choices: [
+          { id: 'set', label: 'set', destination: 'm', effects: [{ field: 'flag', op: 'set', value: 'true' }, { field: 'time', op: 'add_minutes', value: '10' }] },
+          { id: 'noset', label: 'noset', destination: 'm', effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
+        ] },
+        { id: 'm', title: 'M', body: '', choices: [
+          { id: 'c_gated', label: 'gated', destination: 'end', conditions: [{ field: 'flag', op: 'is_true' }], effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
+          { id: 'c_open', label: 'open', destination: 'end', effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
+        ] },
+        { id: 'end', title: 'E', body: '', choices: [], resolvesEnding: true },
+      ],
+      endings: [{ id: 'd', name: 'D', summary: '', conditions: [], isDefault: true }],
+    } as unknown as Story;
+    const r = walkStateSpace(story);
+    expect(r.conditionalChoices).toContain('m::c_gated'); // gated true on the set branch, locked on the noset branch
+    expect(r.conditionalChoices).not.toContain('m::c_open'); // always available
+  });
+});

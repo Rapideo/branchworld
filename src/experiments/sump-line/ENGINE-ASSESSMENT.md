@@ -83,6 +83,11 @@
 - **Verdict:** workaround-ugly (a real mechanic — shelters, battery swaps — is simply unavailable).
 - **Recommended change (medium):** allow a time-driven resource an additive choice-driven *offset* (value =
   clamp(base(time) + offset)), so effects can grant/spend against it without breaking the time model.
+- **UPDATE (2026-06-26): DONE (A6, engine v1.4).** New `adjust_resource` effect op adds a choice-driven
+  additive offset to a time-driven resource — `value = clamp(base(time) + offset)`, stored in a hidden
+  engine-managed var. **Clock-agnostic** (the offset is additive over the resource's own time-function,
+  independent of per-chapter vs. nested game-clock). Lint `ADJUST_RESOURCE_NOT_TIME_DRIVEN` keeps it to
+  time-driven resources; fuzzer **PROBE-G** proves a "swap the battery" choice raises the lamp.
 
 ### F7 — Survival-resource calibration is coupled and unforgiving
 - **Wanted:** the dark "lamp dies" ending reachable on long/careless play; the clean ending reachable on

@@ -417,4 +417,15 @@ describe('linter — resources', () => {
   it('does NOT flag a death ending that is exclusive from / out-ranks co-occurring endings (no false positive)', () => {
     expect(lintStory(resStory()).errors.map((e) => e.code)).not.toContain('ATZERO_PRIORITY_DOMINANCE');
   });
+
+  it('ADJUST_RESOURCE_NOT_TIME_DRIVEN — adjust_resource on a non-time-driven field (F6)', () => {
+    const s = resStory(); // lamp is time-driven; 'dead' is a plain boolean var
+    s.nodes[0].choices = [{ id: 'x', label: 'x', destination: 'a', effects: [{ field: 'dead', op: 'adjust_resource', value: '1' }] }];
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('ADJUST_RESOURCE_NOT_TIME_DRIVEN');
+  });
+  it('does NOT flag adjust_resource on a time-driven resource (no false positive)', () => {
+    const s = resStory();
+    s.nodes[0].choices = [{ id: 'x', label: 'x', destination: 'a', effects: [{ field: 'lamp', op: 'adjust_resource', value: '2' }] }];
+    expect(lintStory(s).errors.map((e) => e.code)).not.toContain('ADJUST_RESOURCE_NOT_TIME_DRIVEN');
+  });
 });

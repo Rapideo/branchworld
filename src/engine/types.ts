@@ -15,7 +15,7 @@ export interface Condition {
 export type EffectOp =
   | 'set' | 'increment' | 'decrement'
   | 'add_item' | 'remove_item' | 'add_clue' | 'remove_clue'
-  | 'change_location' | 'add_minutes'
+  | 'change_location' | 'add_minutes' | 'adjust_resource'
   | 'mark_event_completed' | 'mark_visited';
 
 export interface Effect {

@@ -19,6 +19,11 @@ describe('effects', () => {
   it('never rewinds time on a negative add_minutes (monotonic invariant, H2)', () => {
     expect(applyEffect(base, { field: 'time', op: 'add_minutes', value: '-30' }).time).toBe(900);
   });
+  it('adjust_resource accumulates a hidden resource offset (F6)', () => {
+    const after = applyEffect(base, { field: 'lamp', op: 'adjust_resource', value: '20' });
+    expect(after.vars['__roff_lamp']).toBe(20);
+    expect(applyEffect(after, { field: 'lamp', op: 'adjust_resource', value: '-5' }).vars['__roff_lamp']).toBe(15);
+  });
   it('manages clues, items, location, visited, events', () => {
     expect(applyEffect(base, { field: 'clues', op: 'add_clue', value: 'plate' }).clues).toEqual(['plate']);
     expect(applyEffect(base, { field: 'location', op: 'change_location', value: 'Diner' }).location).toBe('Diner');

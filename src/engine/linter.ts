@@ -390,7 +390,10 @@ export function lintResources(story: Story): LintIssue[] {
   const scanEffects = (effects: { field: string; op: string; value?: string }[] | undefined, where: string) => {
     for (const e of effects ?? []) {
       if (timeDriven.has(e.field) && (e.op === 'set' || e.op === 'increment' || e.op === 'decrement')) {
-        issues.push({ level: 'error', code: 'RESOURCE_TIME_DRIVEN_WRITTEN', message: `Effect writes time-driven resource ${e.field} (it is recomputed from the clock)`, where });
+        issues.push({ level: 'error', code: 'RESOURCE_TIME_DRIVEN_WRITTEN', message: `Effect writes time-driven resource ${e.field} (it is recomputed from the clock; use adjust_resource for an offset)`, where });
+      }
+      if (e.op === 'adjust_resource' && !timeDriven.has(e.field)) {
+        issues.push({ level: 'error', code: 'ADJUST_RESOURCE_NOT_TIME_DRIVEN', message: `adjust_resource targets '${e.field}', which is not a time-driven resource (only time-driven resources have an offset)`, where });
       }
       if (e.op === 'set' && boundOf[e.field] && e.value !== undefined && /^-?\d+(\.\d+)?$/.test(e.value)) {
         const n = Number(e.value);

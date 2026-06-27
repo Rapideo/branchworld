@@ -30,9 +30,11 @@ A6 is built clock-agnostic; the full clock model goes to the post-engine capabil
   (H7 — conditional triggers are already engine-supported; B1 used them).
 - ✅ **A4 (H8/H12)** — present-reachability (`eventPresent`) + per-branch reachability (`conditionalChoices`) in
   the walker; cave's seal-event present node verified reachable.
-- **264 tests green; typecheck clean.**
+- ✅ **A6** — clock-agnostic resource offset (`adjust_resource` op + hidden offset var, F6); PROBE-G proves a
+  battery-swap raises the lamp. Lint `ADJUST_RESOURCE_NOT_TIME_DRIVEN`.
+- **271 tests green; typecheck clean.**
 
-**NEXT = A6** (clock-agnostic time-driven resource offset, F6) → A7 (walker time-bucketing, H10).
+**NEXT = A7** (walker time-bucketing, H10) — the last v1.4 sequence item.
 Remaining team-pass items are **P2** (F8 transition-aware producer check, F9 domain-FP trim, F10
 chapter-deadline-OOT lint, F11 precedence docs) — fold in or do at the pre-merge Team check. THEN the deferred
 **capabilities brainstorm** (task #9): six parked ideas —

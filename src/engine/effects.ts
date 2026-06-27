@@ -52,6 +52,12 @@ export function applyEffect(s: WorldState, e: Effect, bounds?: BoundsMap): World
       const next = addMinutes(s.time, num(coerce(e.value)));
       return { ...s, time: Math.max(s.time, next) };
     }
+    case 'adjust_resource': {
+      // F6: accumulate a choice-driven additive offset for a time-driven resource — applied in
+      // applyResourceStep as value = clamp(base(time) + offset). Stored in a hidden engine-managed var.
+      const key = `__roff_${e.field}`;
+      return { ...s, vars: { ...s.vars, [key]: num(s.vars[key]) + num(coerce(e.value)) } };
+    }
     case 'mark_event_completed':
       return { ...s, completedEvents: uniqPush(s.completedEvents, e.value ?? e.field) };
     case 'mark_visited':

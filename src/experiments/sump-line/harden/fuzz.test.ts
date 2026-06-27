@@ -566,6 +566,29 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
     expect(end.endingReached?.id).toBe('e_special');
   });
 
+  // PROBE-G (F6/A6 closed): a choice can RAISE a time-driven resource via adjust_resource (swap the battery) —
+  // the old engine forbade it (time-driven meters only ever fell). value = clamp(base(time) + offset).
+  it('PROBE-G: adjust_resource lets a choice raise a time-driven lamp (F6 closed)', () => {
+    const story: Story = {
+      id: 'probe_offset', title: 'Offset', startNodeId: 'n0', startTime: '08:00', deadline: '08:35',
+      startLocation: 'loc_a', variables: [], locations: [{ id: 'loc_a', name: 'A' }], events: [],
+      resources: [{ id: 'lamp', label: 'Lamp', min: 0, max: 100, start: 100, depletion: { everyMinutes: 10, amount: 10 } }],
+      nodes: [
+        { id: 'n0', title: 's', body: '', choices: [{ id: 'c_burn', label: 'burn 30', destination: 'n1', effects: [{ field: 'time', op: 'add_minutes', value: '30' }] }] },
+        { id: 'n1', title: 'm', body: '', choices: [{ id: 'c_swap', label: 'swap battery (+20)', destination: 'n_end', effects: [{ field: 'lamp', op: 'adjust_resource', value: '20' }, { field: 'time', op: 'add_minutes', value: '5' }] }] },
+        { id: 'n_end', title: 'e', body: '', choices: [], resolvesEnding: true },
+      ],
+      endings: [{ id: 'd', name: 'D', conditions: [], summary: '', isDefault: true }],
+    };
+    expect(lintStory(story).errors).toEqual([]);
+    const eng = new GameEngine(story);
+    eng.start();
+    const mid = eng.choose('c_burn'); // 08:30, lamp = 100 - 10*3 = 70
+    expect(Number(mid.state.vars.lamp)).toBe(70);
+    const after = eng.choose('c_swap'); // 08:35, base 70, +20 offset -> 90 (the meter went UP)
+    expect(Number(after.state.vars.lamp)).toBe(90);
+  });
+
   // PROBE-D: the coercion asymmetry behind silent cross-chapter contract drift.
   // Proves scaling-finding S1: a carried latch that a downstream chapter reads but an upstream
   // rename left UNWRITTEN reads as undefined — and is_false on undefined OPENS the gate (fails

@@ -464,3 +464,24 @@ describe('linter — resources', () => {
     expect(lintStory(s).errors.map((e) => e.code)).not.toContain('ADJUST_RESOURCE_NOT_TIME_DRIVEN');
   });
 });
+
+describe('lintStory — profile-aware clock lints', () => {
+  // longest path 5 min, window 600 min: TIMED would trip CLOCK_CANNOT_BITE.
+  const base = () => ({
+    id: 'p', title: 'P', startNodeId: 'a', startTime: '00:00', deadline: '10:00', startLocation: 'L',
+    variables: [], locations: [{ id: 'L', name: 'L' }], events: [],
+    nodes: [
+      { id: 'a', title: 'A', body: '', choices: [{ id: 'go', label: 'go', destination: 'e', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] }] },
+      { id: 'e', title: 'E', body: '', choices: [], resolvesEnding: true },
+    ],
+    endings: [{ id: 'd', name: 'D', summary: '', conditions: [], isDefault: true }],
+  });
+  it('timed (the default) still runs the clock lints', () => {
+    expect(lintStory(base() as any).errors.map((e) => e.code)).toContain('CLOCK_CANNOT_BITE');
+  });
+  it('untimed skips the clock lints but flags the residual deadline', () => {
+    const codes = lintStory({ ...(base() as any), profile: { clock: 'untimed' } }).errors.map((e) => e.code);
+    expect(codes).not.toContain('CLOCK_CANNOT_BITE');           // gate skipped it
+    expect(codes).toContain('PROFILE_UNTIMED_HAS_DEADLINE');    // validator caught the residual deadline
+  });
+});

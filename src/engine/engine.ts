@@ -22,7 +22,7 @@ export class GameEngine {
     this.story = story;
     this.state = initState(story);
     this.currentId = story.startNodeId;
-    this.deadline = parseTime(story.deadline);
+    this.deadline = story.deadline !== undefined ? parseTime(story.deadline) : Infinity;
     this.startTime = parseTime(story.startTime);
     this.bounds = buildBounds(story);
     this.enter(this.currentId);

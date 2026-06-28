@@ -114,12 +114,18 @@ export interface VariableDef {
   max?: number;                 // optional numeric upper bound (clamped by the engine)
 }
 
+export type ClockMode = 'timed' | 'untimed'; // 'long-horizon' reserved as a future value of this dimension
+export interface Profile {
+  clock: ClockMode;
+  // future dimensions slot in here as OPTIONAL fields: travel?: 'off' | 'free'; investigation?: 'off' | 'on'; …
+}
+
 export interface Story {
   id: string;
   title: string;
   startNodeId: string;
   startTime: string;            // "HH:MM"
-  deadline: string;             // "HH:MM"
+  deadline?: string;            // "HH:MM" — required for timed stories; absent for untimed
   startLocation: string;
   variables: VariableDef[];
   nodes: StoryNode[];
@@ -128,6 +134,7 @@ export interface Story {
   endings: Ending[];            // ordered; exactly one isDefault with empty conditions
   resources?: Resource[];
   outOfTimeEndingId?: string;   // A3/H4: distinct "the clock chose" ending when the deadline forces resolution with no match
+  profile?: Profile;
 }
 
 export interface WorldState {

@@ -1,8 +1,9 @@
-import type { Story, Choice, Condition, Effect, LintResult, LintIssue } from './types';
+import type { Story, Choice, Condition, Effect, LintResult, LintIssue, Profile } from './types';
 import { parseTime } from './time';
 import { collectSymbols } from './symbols';
 import type { StorySymbols } from './symbols';
 import { coerce } from './conditions';
+import { resolveProfile, validateProfile } from './profile';
 
 const RESERVED_FIELDS = new Set(['time', 'location']);
 const NON_VAR_EFFECT_OPS = new Set<Effect['op']>([
@@ -90,7 +91,7 @@ function timeBounds(story: Story): { maxTime: number; minTime: number } {
   return { maxTime, minTime };
 }
 
-export function lintStory(story: Story): LintResult {
+export function lintStory(story: Story, inherited?: Profile): LintResult {
   const errors: LintIssue[] = [];
   const warnings: LintIssue[] = [];
   const err = (code: string, message: string, where?: string) =>
@@ -105,6 +106,7 @@ export function lintStory(story: Story): LintResult {
   for (const r of story.resources ?? []) varNames.add(r.id);
   const itemVars = new Set(story.variables.filter((v) => v.kind === 'item').map((v) => v.name));
   const sym = collectSymbols(story);
+  const profile = resolveProfile(story, inherited);
 
   // reserved namespace: the '__' prefix is engine-internal (e.g. resource offsets stored as `__roff_<id>`)
   for (const v of story.variables) {
@@ -324,43 +326,47 @@ export function lintStory(story: Story): LintResult {
   }
 
   // time-literal range: every time_* condition/trigger value must sit in [startTime, deadline]
-  const startMin = parseTime(story.startTime);
-  const deadlineMin = parseTime(story.deadline);
-  const checkTimeLiterals = (cs: Condition[] | undefined, where: string) => {
-    for (const c of cs || []) {
-      if (!c.op.startsWith('time_') || !c.value) continue;
-      const lits = c.op === 'time_between' ? c.value.split('-') : [c.value];
-      for (const lit of lits) {
-        const t = parseTime(lit.trim());
-        if (t < startMin || t > deadlineMin) {
-          err('TIME_LITERAL_OUT_OF_RANGE',
-            `Time literal ${lit} (=${t}m) in ${c.op} is outside the story window [${story.startTime}, ${story.deadline}]. ` +
-            `Use absolute minutes past midnight for after-midnight times (e.g. '26:10').`, where);
+  if (profile.clock === 'timed' && story.deadline !== undefined) {
+    const startMin = parseTime(story.startTime);
+    const deadlineMin = parseTime(story.deadline);
+    const checkTimeLiterals = (cs: Condition[] | undefined, where: string) => {
+      for (const c of cs || []) {
+        if (!c.op.startsWith('time_') || !c.value) continue;
+        const lits = c.op === 'time_between' ? c.value.split('-') : [c.value];
+        for (const lit of lits) {
+          const t = parseTime(lit.trim());
+          if (t < startMin || t > deadlineMin) {
+            err('TIME_LITERAL_OUT_OF_RANGE',
+              `Time literal ${lit} (=${t}m) in ${c.op} is outside the story window [${story.startTime}, ${story.deadline}]. ` +
+              `Use absolute minutes past midnight for after-midnight times (e.g. '26:10').`, where);
+          }
         }
       }
+    };
+    for (const n of story.nodes) {
+      checkTimeLiterals(n.conditions, n.id);
+      for (const c of n.choices || []) checkTimeLiterals(c.conditions, c.id);
     }
-  };
-  for (const n of story.nodes) {
-    checkTimeLiterals(n.conditions, n.id);
-    for (const c of n.choices || []) checkTimeLiterals(c.conditions, c.id);
-  }
-  for (const ev of story.events) checkTimeLiterals(ev.trigger, ev.id);
-  for (const en of story.endings) checkTimeLiterals(en.conditions, en.id);
+    for (const ev of story.events) checkTimeLiterals(ev.trigger, ev.id);
+    for (const en of story.endings) checkTimeLiterals(en.conditions, en.id);
 
-  // deadline reachability
-  const window = parseTime(story.deadline) - parseTime(story.startTime);
-  const { maxTime, minTime } = timeBounds(story);
-  if (maxTime < window) {
-    err('CLOCK_CANNOT_BITE', `Longest reachable path accumulates ${maxTime} min but the deadline window is ${window} min — the clock can never run out`);
-  }
-  if (minTime > window) {
-    err('DEADLINE_UNWINNABLE', `Shortest reachable path (${minTime} min) already exceeds the deadline window (${window} min)`);
+    // deadline reachability
+    const window = deadlineMin - startMin;
+    const { maxTime, minTime } = timeBounds(story);
+    if (maxTime < window) {
+      err('CLOCK_CANNOT_BITE', `Longest reachable path accumulates ${maxTime} min but the deadline window is ${window} min — the clock can never run out`);
+    }
+    if (minTime > window) {
+      err('DEADLINE_UNWINNABLE', `Shortest reachable path (${minTime} min) already exceeds the deadline window (${window} min)`);
+    }
   }
 
   for (const issue of lintResources(story)) {
     if (issue.level === 'error') errors.push(issue);
     else warnings.push(issue);
   }
+
+  for (const i of validateProfile(story, inherited)) err(i.code, i.message, i.where);
 
   return { ok: errors.length === 0, errors, warnings };
 }

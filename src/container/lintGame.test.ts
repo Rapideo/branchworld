@@ -56,3 +56,37 @@ describe('lintGame', () => {
     expect(lintGame(g).errors.some((e) => e.code === 'GAME_CHAPTER_LINT')).toBe(true);
   });
 });
+
+describe('lintGame — profile inheritance + conformance', () => {
+  const game = (gameProfile?: { clock: 'timed' | 'untimed' }, chapterProfile?: { clock: 'timed' | 'untimed' }): Game => ({
+    id: 'g', title: 'G', startChapterId: 'c1', carry: { vars: 'all', resources: [], clues: true, inventory: true },
+    ...(gameProfile ? { profile: gameProfile } : {}),
+    chapters: [{ id: 'c1', title: 'C1', gameEnding: true, transitions: [],
+      story: {
+        id: 'c1', title: 'C1', startNodeId: 'a', startTime: '00:00', startLocation: 'L',
+        ...(chapterProfile ? { profile: chapterProfile } : {}),
+        variables: [], locations: [{ id: 'L', name: 'L' }], events: [],
+        nodes: [{ id: 'a', title: 'A', body: '', choices: [], resolvesEnding: true }],
+        endings: [{ id: 'd', name: 'D', summary: '', conditions: [], isDefault: true }],
+      } }],
+  });
+  it('a chapter with no profile inherits the game profile (untimed lints clean, no deadline)', () => {
+    expect(lintGame(game({ clock: 'untimed' })).errors).toEqual([]);
+  });
+  it('a chapter declaring a clock that conflicts with the game is flagged', () => {
+    expect(lintGame(game({ clock: 'untimed' }, { clock: 'timed' })).errors.map((e) => e.code)).toContain('PROFILE_CHAPTER_CONFLICT');
+  });
+  it('flags mixed clocks with no Game.profile: an explicit-untimed chapter + an implicit-timed chapter', () => {
+    const mk = (id: string, extra: object) => ({ id, title: id, startNodeId: 'n', startTime: '00:00', startLocation: 'L',
+      variables: [], locations: [{ id: 'L', name: 'L' }], events: [],
+      nodes: [{ id: 'n', title: 'N', body: '', choices: [], resolvesEnding: true }],
+      endings: [{ id: 'd', name: 'D', summary: '', conditions: [], isDefault: true }], ...extra });
+    const mixed: Game = { id: 'm', title: 'M', startChapterId: 'a',
+      carry: { vars: 'all', resources: [], clues: true, inventory: true },
+      chapters: [
+        { id: 'a', title: 'A', transitions: [{ when: {}, goTo: 'b' }], story: mk('a', { profile: { clock: 'untimed' } }) as any },
+        { id: 'b', title: 'B', gameEnding: true, transitions: [], story: mk('b', { deadline: '00:00' }) as any },
+      ] };
+    expect(lintGame(mixed).errors.map((e) => e.code)).toContain('PROFILE_CHAPTER_CONFLICT');
+  });
+});

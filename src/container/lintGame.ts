@@ -1,4 +1,4 @@
-import { lintStory } from '../engine';
+import { lintStory, resolveProfile } from '../engine';
 import type { LintIssue } from '../engine';
 import type { Game } from './types';
 import { lintGameContracts } from './lintGameContracts';
@@ -25,10 +25,21 @@ export function lintGame(game: Game): { ok: boolean; errors: LintIssue[]; warnin
         errors.push({ level: 'error', code: 'GAME_NO_CATCHALL', message: `non-game-ending chapter ${ch.id} has no catch-all transition; some end-state could have no next chapter`, where: ch.id });
       }
     }
-    const r = lintStory(ch.story);
+    const r = lintStory(ch.story, game.profile);
     for (const e of r.errors) {
       errors.push({ level: 'error', code: 'GAME_CHAPTER_LINT', message: `chapter ${ch.id}: [${e.code}] ${e.message}`, where: ch.id });
     }
+  }
+
+  // v1 requires a uniform clock across a game. Compare each chapter's RESOLVED clock (its own profile, else
+  // the inherited game profile, else the timed default) PLUS the game's own declaration — so an
+  // implicitly-timed chapter under an explicitly-untimed sibling, or a chapter overriding the game, is caught.
+  const clocks = new Set(game.chapters.map((ch) => resolveProfile(ch.story, game.profile).clock));
+  if (game.profile) clocks.add(game.profile.clock);
+  if (clocks.size > 1) {
+    errors.push({ level: 'error', code: 'PROFILE_CHAPTER_CONFLICT',
+      message: `mixed clock profiles [${[...clocks].sort().join(', ')}] across the game and its chapters — v1 requires a uniform clock`,
+      where: game.startChapterId });
   }
 
   // reachability from start

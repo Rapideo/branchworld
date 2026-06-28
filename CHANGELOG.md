@@ -9,6 +9,30 @@ taken before the first deliberate un-freeze.
 > Note: `package.json` `version` (`0.1.0`) is the npm package version and is intentionally *separate* from
 > the engine version line below.
 
+## [Unreleased] — Profile framework + clock dimension (branch `feature/engine-profile`)
+
+The first shipped **profile** — a per-story / per-game declaration of which engine dimensions are active. Ships the `clock` dimension (`'timed'` | `'untimed'`) with conformance validation, two named presets, authoring guides, and an untimed reference game. **Zero behavior change for timed games** (timed is the default; all existing stories and games are unchanged). WS-D/D1 done.
+
+### What landed
+
+- **`Profile` type + `ClockMode`** in `src/engine/types.ts` — `Story.profile?: Profile`, `Game.profile?: Profile`.
+- **`src/engine/profile.ts`** — `clockDimension`, `DEFAULT_PROFILE` (derived from dimension defaults so it can't drift), `resolveProfile(story, inherited?)`, `validateProfile(story, inherited?)`, and presets `TIME_PRESSURE_SURVIVAL` / `UNTIMED_BRANCHING`.  Re-exported via `src/engine/index.ts`.
+- **`lintStory(story, inherited?)`** — takes an optional inherited `Profile` (game-wide default); `validateProfile` runs inside; flags `PROFILE_TIMED_NEEDS_DEADLINE`, `PROFILE_UNTIMED_HAS_{DEADLINE,OOT_ENDING,TIME_RESOURCE,TIME_CONDITION}`.  Clock-reading detection covers both `time_*` ops AND any value op on the reserved `field:'time'` (the engine resolves both to `state.time`).
+- **`Story.deadline` made optional** — was `string` (required), now `string | undefined` (absent for untimed stories).  Five consumer sites guarded: `engine.ts` (×2), `linter.ts`, `carry.ts`, `timeAxis.ts`.
+- **`lintGame`** — propagates `profile` to `lintStory`; adds conformance check: any mix of `'timed'` / `'untimed'` clock declarations across `Game.profile` and chapter `story.profile` is a `PROFILE_CHAPTER_CONFLICT` error (v1 requires a uniform clock).
+- **Retrofit** — `sumpLine` and `countinghouse` each get `profile: TIME_PRESSURE_SURVIVAL` (behaviorally a no-op; proves the field on real games).
+- **`src/container/untimedExample.ts`** — a two-chapter `Game` with `profile: UNTIMED_BRANCHING`, no deadline anywhere, a choice-driven resource (`trust`), state-gated endings (priority 2 / 1 / default), no `add_minutes`.  Lints clean; `walkStateSpace` finds no softlocks on either chapter; `GameRunner` plays to all three endings.
+- **Authoring guides** — `docs/authoring/time-pressure-survival.md` (pointer to the cave/heist method) and `docs/authoring/untimed-branching.md` (the real content: what to forbid, what to use instead, the walker-cheapness `add_minutes` caveat).
+
+### Deferred boundary (not in v1)
+
+The profile framework is intentionally minimal: one dimension, one gate.  Deferred:
+- **Long-horizon / scoping** — a `'long-horizon'` clock value for month-scale games (reserved in the `ClockMode` type comment) and a per-chapter scope toggle.  Ships when a second project needs it.
+- **Travel + investigation dimensions** — `travel?: 'off' | 'free'` and `investigation?: 'off' | 'on'` (the WS-D brainstorm candidates).  Sequenced after the D2 prototype corpus proves the combinations.
+- **`incompatiblePairs`** — the cross-dimension validator hook (e.g. `investigation + untimed` may be semantically odd).  The hook location is stubbed in the `DIMENSIONS` loop comment; wires in when dimension #2 lands.
+- **D2 prototype corpus** — 10–20 small prototype games each declaring a different profile combination to empirically stress-test the framework and surface incompatibilities before they graduate to presets.
+- **`add_minutes`/walker-key optimization for untimed** — when no effect advances the clock, the walker key could drop the time dimension entirely for a cheaper walk.  The validator does not enforce `add_minutes` absence; the guide documents the caveat.
+
 ## [Unreleased] — Container promoted to `src/container/` (branch `refactor/promote-container`)
 
 The multi-chapter container is now a **shared, game-agnostic layer** at `src/container/` (was physically inside

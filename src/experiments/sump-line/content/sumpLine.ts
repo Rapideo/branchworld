@@ -1,4 +1,5 @@
 import type { Game } from '..';
+import { TIME_PRESSURE_SURVIVAL } from '../../../engine';
 import { ch1Descent } from './ch1Descent';
 import { ch2High } from './ch2High';
 import { ch2Sump } from './ch2Sump';
@@ -17,6 +18,7 @@ export const sumpLine: Game = {
   id: 'sump_line',
   title: 'The Sump Line',
   startChapterId: 'ch1_descent',
+  profile: TIME_PRESSURE_SURVIVAL,
   carry: { vars: 'all', resources: ['lamp_charge', 'body_heat'], clues: true, inventory: true },
   gameDeadlineMinutes: 360,
   // A1 v1.1 — the cross-chapter contract, machine-checked:

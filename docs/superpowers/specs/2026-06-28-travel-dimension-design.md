@@ -17,7 +17,8 @@
 > set**, not the `parent` spanning tree (the tree-only version false-positives reconvergent — i.e. normal — roam
 > maps); **(2)** `ROAM_UNBOUNDED_HUB_WRITE` now rejects `adjust_resource` (its unclamped `__roff_` offset is a
 > keyed var) and applies in **both** clock modes; **(3)** bucket alignment is defined by the `readsClock`
-> predicate (catches `{field:'time'}` value-ops) and `startTime`-anchored depletion boundaries; **(4)** the
+> predicate (catches `{field:'time'}` value-ops); depletion boundaries are subsumed (depleted values are keyed);
+> **(4)** the
 > timed-roam bucket is a *verification parameter*, not a profile field; **(5)** `ROAM_HUB_NONIDEMPOTENT` **cut**
 > (noise); **(6)** multi-chapter roam **fenced off** in v1 (`ROAM_CARRY_UNVERIFIABLE` forbids it) instead of
 > building unexercised container-walk parity — that build is gated on the D2 corpus.
@@ -137,11 +138,11 @@ of exhaustiveness loud** — never silent:
   2. every clock-reading literal in an **ending** `condition`;
   3. every **`ScheduledEvent`** trigger time;
   4. the **`deadline`**;
-  5. **resource depletion-step boundaries** — `startTime`-anchored: steps fall at `startTime + k·everyMinutes`
-     (`resources.ts`), while the key buckets *absolute* time, so the divisor is **`gcd(startTime, everyMinutes)`**
-     (add `startTime` to the set), not `everyMinutes` alone. *This item applies only insofar as a depleted
-     resource value is not itself a separately-keyed var — to be pinned against the resource-storage model in the
-     plan; if depleted values are keyed (and thus explored regardless of bucket, see below), item 5 is subsumed.*
+  5. ~~resource depletion-step boundaries~~ — **RESOLVED / not needed.** `applyResourceStep` (`resources.ts:31-33`)
+     **writes** each recomputed depleted value into `state.vars[r.id]`, and `keyOf` keys all of `s.vars` *raw*
+     (unbucketed). So two sub-bucket times on opposite sides of a depletion step have different `vars[r.id]` →
+     different keys → never merged; depletion-driven branches (and the `atZero` setFlag, also a keyed var) are
+     explored regardless of bucket. Depletion boundaries are **subsumed** — they add no alignment requirement.
   Node-level `conditions` are **excluded** — the engine never evaluates `n.conditions` at runtime (only
   choice/ending/event conditions), so they gate nothing. The lint errors with the offending threshold and a
   suggested bucket (the GCD of the set, capped by the smallest `travelTimes`). The author either coarsens the
@@ -334,8 +335,8 @@ The static linter must become travel-aware **when `travel:'free'`**:
 - **The roam-verification lints** — `ROAM_UNBOUNDED_HUB_WRITE` bites on (a) an unbounded `increment` and (b) an
   `adjust_resource` on a roam-reachable entry effect, and passes a *bounded* counter and the set-semantic effects
   (`add_clue`/`set`); `ROAM_BUCKET_MISALIGNED` bites on both a `time_*`-op and a `{field:'time'}` value-op choice
-  gate whose threshold the bucket doesn't divide (and names the threshold + a suggested bucket), and on a
-  `startTime`-offset depletion boundary; a deliberately oversized roam map trips `ROAM_STATE_CAP_HIT` and the
+  gate whose threshold the bucket doesn't divide (and names the threshold + a suggested bucket); a deliberately
+  oversized roam map trips `ROAM_STATE_CAP_HIT` and the
   verify result is **INDETERMINATE/fail**, not a clean pass; `ROAM_CHAPTER_PROFILE_MISSING` bites on a
   `travel:'free'` game with a bare chapter.
 - **Co-reachability** — the stranding fixture reports a non-empty `deadRegions` with a sample path; the

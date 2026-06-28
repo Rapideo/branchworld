@@ -9,7 +9,15 @@ taken before the first deliberate un-freeze.
 > Note: `package.json` `version` (`0.1.0`) is the npm package version and is intentionally *separate* from
 > the engine version line below.
 
-## [Unreleased] — Profile framework + clock dimension (branch `feature/engine-profile`)
+## engine v1.5 — counted inventory + the profile framework (tag `engine-v1.5`, 2026-06-28)
+
+> **Tag `engine-v1.5`** marks the post-v1.4 engine line: **counted inventory** (`58526b6`) + the **profile
+> framework / clock dimension** (described below). Cut at `master` after the heist slice, the loud route, and the
+> container promotion (those are content/refactor, not engine changes). The next engine work — the `travel` /
+> `investigation` profile dimensions — opens the v1.6 line. Nothing pushed (local only); a `git bundle` backup
+> was taken at this tag.
+
+### Profile framework + clock dimension (branch `feature/engine-profile`)
 
 The first shipped **profile** — a per-story / per-game declaration of which engine dimensions are active. Ships the `clock` dimension (`'timed'` | `'untimed'`) with conformance validation, two named presets, authoring guides, and an untimed reference game. **Zero behavior change for timed games** (timed is the default; all existing stories and games are unchanged). WS-D/D1 done.
 

@@ -103,11 +103,13 @@ export function lintStory(story: Story): LintResult {
   const varNames = new Set(story.variables.map((v) => v.name));
   // resource ids are valid effect/condition targets — add them so checkConds/checkEffs don't UNDEFINED_VAR them
   for (const r of story.resources ?? []) varNames.add(r.id);
+  const itemVars = new Set(story.variables.filter((v) => v.kind === 'item').map((v) => v.name));
   const sym = collectSymbols(story);
 
   // reserved namespace: the '__' prefix is engine-internal (e.g. resource offsets stored as `__roff_<id>`)
   for (const v of story.variables) {
     if (v.name.startsWith('__')) err('RESERVED_VAR_PREFIX', `Variable '${v.name}' uses the reserved '__' prefix (engine-internal, e.g. resource offsets)`, v.name);
+    if (v.kind === 'item' && v.type !== 'number') err('ITEM_NOT_NUMERIC', `Item '${v.name}' (kind:'item') must be type 'number'`, v.name);
   }
 
   // duplicate node ids
@@ -149,6 +151,10 @@ export function lintStory(story: Story): LintResult {
         const clue = c.value ?? c.field;
         if (!sym.producibleClues.has(clue)) err('DEAD_CLUE_REFERENCE',
           `Condition requires clue '${clue}' that no add_clue effect can produce`, where);
+        continue;
+      }
+      if (c.op === 'has_item') {
+        if (!itemVars.has(c.field)) err('HAS_ITEM_NOT_ITEM', `has_item references '${c.field}' which is not a declared item (kind:'item')`, where);
         continue;
       }
       if (c.op === 'has_visited' || c.op.startsWith('time_')) continue;

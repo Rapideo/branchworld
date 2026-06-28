@@ -28,6 +28,7 @@ export function evaluateCondition(c: Condition, s: WorldState): boolean {
     case 'lte': return num(cur) <= num(coerce(c.value));
     case 'is_true': return cur === true || cur === 'true' || num(cur) > 0;
     case 'is_false': return !(cur === true || cur === 'true' || num(cur) > 0);
+    case 'has_item': return num(cur) >= (c.value != null ? num(coerce(c.value)) : 1);
     case 'has_clue': return s.clues.includes(c.value ?? c.field);
     case 'has_visited': return s.visited.includes(c.value ?? c.field);
     case 'time_before': return s.time < parseTime(c.value ?? '00:00');

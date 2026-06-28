@@ -65,6 +65,25 @@ describe('linter', () => {
     expect(lintStory(s).errors.map((e) => e.code)).toContain('RESERVED_VAR_PREFIX');
   });
 
+  it('ITEM_NOT_NUMERIC — a kind:item var that is not type number', () => {
+    const s = clean();
+    s.variables.push({ name: 'loot', type: 'string', kind: 'item', default: '', purpose: 'x' });
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('ITEM_NOT_NUMERIC');
+  });
+  it('HAS_ITEM_NOT_ITEM — has_item on a var that is not a declared item', () => {
+    const s = clean();
+    s.nodes[0].choices[0].conditions = [{ field: 'knows', op: 'has_item' }]; // 'knows' is a boolean, not an item
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('HAS_ITEM_NOT_ITEM');
+  });
+  it('does NOT flag a valid item var + has_item (no false positive)', () => {
+    const s = clean();
+    s.variables.push({ name: 'thermite', type: 'number', kind: 'item', default: 0, min: 0, max: 3, purpose: 'x' });
+    s.nodes[0].choices[0].conditions = [{ field: 'thermite', op: 'has_item' }];
+    const codes = lintStory(s).errors.map((e) => e.code);
+    expect(codes).not.toContain('ITEM_NOT_NUMERIC');
+    expect(codes).not.toContain('HAS_ITEM_NOT_ITEM');
+  });
+
   it('flags a no-exit dead-end node', () => {
     const s = clean();
     s.nodes[1].resolvesEnding = false; // node b now has no choices and no resolution

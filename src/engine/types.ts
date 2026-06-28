@@ -2,7 +2,7 @@ export type Primitive = string | number | boolean;
 
 export type ConditionOp =
   | 'equals' | 'not_equals' | 'gt' | 'gte' | 'lt' | 'lte'
-  | 'is_true' | 'is_false' | 'has_clue' | 'has_visited'
+  | 'is_true' | 'is_false' | 'has_clue' | 'has_visited' | 'has_item'
   | 'time_before' | 'time_after' | 'time_between';
 
 export interface Condition {
@@ -106,6 +106,7 @@ export interface Resource {
 export interface VariableDef {
   name: string;
   type: 'boolean' | 'number' | 'string';
+  kind?: 'item';                // tags a number var as an inventory item (front-end backpack + lint)
   default: Primitive;
   purpose: string;              // single semantic meaning
   label?: string;

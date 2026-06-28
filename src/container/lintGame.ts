@@ -25,10 +25,19 @@ export function lintGame(game: Game): { ok: boolean; errors: LintIssue[]; warnin
         errors.push({ level: 'error', code: 'GAME_NO_CATCHALL', message: `non-game-ending chapter ${ch.id} has no catch-all transition; some end-state could have no next chapter`, where: ch.id });
       }
     }
-    const r = lintStory(ch.story);
+    const r = lintStory(ch.story, game.profile);
     for (const e of r.errors) {
       errors.push({ level: 'error', code: 'GAME_CHAPTER_LINT', message: `chapter ${ch.id}: [${e.code}] ${e.message}`, where: ch.id });
     }
+  }
+
+  // v1 requires a uniform clock across a game; every EXPLICIT clock declaration (game + chapters) must agree.
+  const declaredClocks = new Set<string>();
+  if (game.profile) declaredClocks.add(game.profile.clock);
+  for (const ch of game.chapters) if (ch.story.profile) declaredClocks.add(ch.story.profile.clock);
+  if (declaredClocks.size > 1) {
+    errors.push({ level: 'error', code: 'PROFILE_CHAPTER_CONFLICT',
+      message: `mixed clock declarations [${[...declaredClocks].sort().join(', ')}] across the game and its chapters — v1 requires a uniform clock` });
   }
 
   // reachability from start

@@ -1,4 +1,4 @@
-import type { Story, Condition, Primitive, GameView, EngineSnapshot } from '../engine';
+import type { Story, Condition, Primitive, GameView, EngineSnapshot, Profile } from '../engine';
 
 /** A rule evaluated when a chapter ends; first match wins. Empty `when` = catch-all. */
 export interface ChapterTransition {
@@ -28,6 +28,7 @@ export interface Game {
   startChapterId: string;
   chapters: Chapter[];
   carry: CarryContract;
+  profile?: Profile;                   // game-wide inherited default; a chapter's own story.profile overrides it
   gameDeadlineMinutes?: number; // optional overall survival horizon (container-projected)
   domains?: Record<string, string[]>;  // A1 v1.1: a var -> its legal value set (annotated, zero-FP DOMAIN check)
   mutexLatches?: string[][];           // A1 v1.1: groups of mutually-exclusive latches (an ending asserting one must exclude its partners)

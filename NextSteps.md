@@ -33,15 +33,13 @@ A6 is built clock-agnostic; the full clock model goes to the post-engine capabil
 - ✅ **A6** — clock-agnostic resource offset (`adjust_resource` op + hidden offset var, F6); PROBE-G proves a
   battery-swap raises the lamp. Lint `ADJUST_RESOURCE_NOT_TIME_DRIVEN`.
 - ✅ **A7** — `walkStateSpace({ timeBucket: N })` mode (H10) + method-doc correction (quantize detour times).
-- **272 tests green; typecheck clean. ▶▶ v1.4 SEQUENCE COMPLETE.**
+- **276 tests green; typecheck clean. ▶▶ v1.4 COMPLETE** (A2..A7 + team-pass F1–F6 + the pre-merge fixes).
 
-**NEXT = decide the merge of `feature/engine-v1.4` → `main`** (a lighter pre-merge Team check first), then the
-deferred **capabilities brainstorm** (task #9). Remaining team-pass items are **P2** (F8 transition-aware producer
-check, F9 domain-FP trim, F10 chapter-deadline-OOT lint, F11 precedence docs) — fold in at the pre-merge check
-or defer.
-Remaining team-pass items are **P2** (F8 transition-aware producer check, F9 domain-FP trim, F10
-chapter-deadline-OOT lint, F11 precedence docs) — fold in or do at the pre-merge Team check. THEN the deferred
-**capabilities brainstorm** (task #9): six parked ideas —
+**NEXT = merge `feature/engine-v1.4` → `main`** (pre-merge Team check done = OK-WITH-FIXES, all fixed; F11
+precedence docs done). Remaining team-pass **P2** (all clean on the shipped content, deferred): F8
+(`hasProducerFreePath` ignores transition conditions), F9 (`CONTRACT_DOMAIN_VIOLATION` counts defaults /
+`not_equals`), F10 (chapter-deadline-OOT lint). THEN the deferred **capabilities brainstorm** (task #9): six
+parked ideas —
 inventory, clue-finding/scene-exploration, free travel between locations, characters+locations as rich
 assets, an engine "Settings & Preferences" profile (chapter-vs-no-chapter, carry rules, **clock model**),
 and **As Dusk Falls-style** timed/skill challenges (narrative-native QTEs; mostly front-end). Each gets its

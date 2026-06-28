@@ -40,7 +40,22 @@ The full clock-model design is deferred to the post-engine capabilities brainsto
   - **F3**: `endsWith` is now a resolution trigger; a resource death always beats a node-named pin; the
     out-of-time ending is excluded from state-matching (so it may be condition-free).
   - **F4** `CONTRACT_UNKNOWN_ANNOTATION`, **F5** `OUT_OF_TIME_HAS_CONDITIONS`, **F6** `ENDSWITH_WITH_LIVE_CHOICES`.
-  259 tests green; typecheck clean.
+- **A5** (`93dc85d`) — `EVENT_PRESENT_NODE_ON_DEMAND` lint (H6 regression guard) + a conditional-trigger
+  regression lock (H7; the engine already evaluates the full trigger).
+- **A4** (`95e0eef`) — walker present-reachability (`eventPresent`) + per-branch reachability
+  (`conditionalChoices`) (H8/H12).
+- **A6** (`5e3f258`) — `adjust_resource`: a clock-agnostic additive offset on a time-driven resource —
+  `value = clamp(base(time) + offset)`; a "swap the battery" choice can raise a meter (F6).
+- **A7** (`02e68dc`) — `walkStateSpace({ timeBucket })` scale mode + method-doc correction (H10).
+- **Pre-merge Team-check fixes** (`78d1bb5` / `d8375bd` / `d599bb9`) — closed two atZero death-masking seams
+  (resolver OOT-alias + the F2 lint false-negative); made `eventPresent` count actual present-firings (not node
+  membership); added the `RESERVED_VAR_PREFIX` guard for the `__roff_` offset namespace; corrected the
+  `timeBucket` approximate-mode caveat.
+
+**276 tests green; typecheck clean. v1.4 sequence complete.** Note: out-of-time in the cave is handled by an
+honest default ending (`end_benighted_high`), not `outOfTimeEndingId`. Deferred to a later pass (P2, all clean
+on the shipped content): F8 (`hasProducerFreePath` ignores transition conditions → hypothetical FP), F9
+(`CONTRACT_DOMAIN_VIOLATION` counts defaults / `not_equals` → hypothetical FP), F10 (no chapter-deadline-OOT lint).
 
 ## [1.3.0] — 2026-06-24 — frozen baseline (tag `engine-v1.3`)
 

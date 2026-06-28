@@ -418,7 +418,9 @@ export function lintResources(story: Story): LintIssue[] {
   // ATZERO_PRIORITY_DOMINANCE (F2) — post-A3 the atZero ending competes by priority instead of
   // short-circuiting, so a resource death is honest only if it strictly out-ranks every non-default ending it
   // can co-occur with. Enforce that here (the firing state includes the atZero setFlag, so a death-guarded
-  // ending is provably exclusive). Zero-FP: only fires when co-occurrence is NOT provably contradictory.
+  // ending is provably exclusive). Zero-FP *modulo `contradicts()` completeness*: only fires when co-occurrence
+  // is not provably contradictory (a genuinely-exclusive pair on unrelated vars that `contradicts` can't prove
+  // could in principle FP; the escape hatch is to make the exclusion explicit).
   const endingsById = new Map(story.endings.map((e) => [e.id, e]));
   const nonDefaultEndings = story.endings.filter((e) => !e.isDefault);
   for (const r of resources) {

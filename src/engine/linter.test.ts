@@ -59,6 +59,12 @@ describe('linter', () => {
     expect(lintStory(s).errors.some((e) => e.code === 'UNDEFINED_VAR')).toBe(true);
   });
 
+  it('RESERVED_VAR_PREFIX — a declared variable using the engine-reserved __ prefix (offset collision guard)', () => {
+    const s = clean();
+    s.variables.push({ name: '__roff_lamp', type: 'number', default: 0, purpose: 'x' });
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('RESERVED_VAR_PREFIX');
+  });
+
   it('flags a no-exit dead-end node', () => {
     const s = clean();
     s.nodes[1].resolvesEnding = false; // node b now has no choices and no resolution

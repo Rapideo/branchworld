@@ -105,6 +105,11 @@ export function lintStory(story: Story): LintResult {
   for (const r of story.resources ?? []) varNames.add(r.id);
   const sym = collectSymbols(story);
 
+  // reserved namespace: the '__' prefix is engine-internal (e.g. resource offsets stored as `__roff_<id>`)
+  for (const v of story.variables) {
+    if (v.name.startsWith('__')) err('RESERVED_VAR_PREFIX', `Variable '${v.name}' uses the reserved '__' prefix (engine-internal, e.g. resource offsets)`, v.name);
+  }
+
   // duplicate node ids
   const seen = new Set<string>();
   for (const n of story.nodes) {

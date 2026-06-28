@@ -29,7 +29,7 @@ describe('timeAxis', () => {
   it('computes the window and places each event by fraction', () => {
     const a = timeAxis(praterLine);
     expect(a.startMin).toBe(parseTime(praterLine.startTime));
-    expect(a.deadlineMin).toBe(parseTime(praterLine.deadline));
+    expect(a.deadlineMin).toBe(parseTime(praterLine.deadline!));
     expect(a.windowMin).toBe(a.deadlineMin - a.startMin);
     const mark = a.marks[0];
     expect(mark.frac).toBeGreaterThan(0);

@@ -6,7 +6,7 @@ export interface TimeAxisData { startMin: number; deadlineMin: number; windowMin
 
 export function timeAxis(story: Story): TimeAxisData {
   const startMin = parseTime(story.startTime);
-  const deadlineMin = parseTime(story.deadline);
+  const deadlineMin = story.deadline !== undefined ? parseTime(story.deadline) : parseTime(story.startTime);
   const windowMin = deadlineMin - startMin;
   const marks: TimeMark[] = [];
   for (const ev of story.events) {

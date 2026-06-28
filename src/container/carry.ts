@@ -55,7 +55,8 @@ export function seedChapterStory(
   if (gameDeadlineMinutes !== undefined) {
     const chapterStart = parseTime(s.startTime);
     const projected = chapterStart + Math.max(0, gameDeadlineMinutes - gameElapsedMinutes);
-    const eff = Math.max(chapterStart, Math.min(parseTime(s.deadline), projected));
+    const chapterDeadlineMin = s.deadline !== undefined ? parseTime(s.deadline) : Infinity;
+    const eff = Math.max(chapterStart, Math.min(chapterDeadlineMin, projected));
     s.deadline = minutesToClock(eff);
   }
 

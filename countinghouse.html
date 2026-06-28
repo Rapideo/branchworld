@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Countinghouse</title>
+<style>
+  :root { --bg:#08080a; --ink:#d2ccc0; --dim:#8b8478; --lead:#c79a52; --take:#7a9b6f; --line:#211f1c; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:var(--bg); }
+  body {
+    color:var(--ink);
+    font:18px/1.7 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    background-image: radial-gradient(900px 500px at 50% -8%, rgba(199,154,82,.07), transparent 62%);
+    min-height:100vh;
+  }
+  main { max-width:640px; margin:0 auto; padding:34px 22px 90px; }
+  .status { display:flex; justify-content:space-between; align-items:baseline;
+    border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:14px;
+    font-size:12px; letter-spacing:.18em; text-transform:uppercase; }
+  .status .chapter { color:var(--dim); }
+  .status .clock { color:var(--lead); }
+  .meters { display:flex; gap:18px; margin-bottom:26px; }
+  .meter { flex:1; display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); }
+  .meter-track { flex:1; height:5px; background:#16140f; border-radius:3px; overflow:hidden; }
+  .meter-fill { display:block; height:100%; background:var(--lead); transition:width .35s ease; }
+  .meter:nth-child(2) .meter-fill { background:var(--take); }
+  .meter.low .meter-fill { background:#c9543f; }
+  .node-title { font-weight:600; font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); margin:0 0 12px; }
+  .prose p { margin:0 0 1.05em; }
+  .prose p:last-child { margin-bottom:0; }
+  .choices { display:flex; flex-direction:column; gap:11px; margin-top:30px; }
+  .choice {
+    text-align:left; background:#100e0b; color:var(--ink); border:1px solid var(--line);
+    border-radius:10px; padding:14px 16px; font:inherit; font-size:16px; cursor:pointer; transition:.14s;
+  }
+  .choice:hover { border-color:var(--lead); background:#15120c; transform:translateX(2px); }
+  .ending { text-align:center; padding-top:24px; }
+  .ending-kicker { color:var(--dim); font-size:12px; letter-spacing:.3em; text-transform:uppercase; margin-bottom:14px; }
+  .ending-name { font-weight:600; font-size:30px; line-height:1.15; margin:0 0 26px; color:var(--lead); }
+  .ending .prose { text-align:left; }
+  .restart { margin-top:34px; background:transparent; color:var(--dim); border:1px solid var(--line);
+    border-radius:10px; padding:11px 18px; font:inherit; font-size:14px; cursor:pointer; }
+  .restart:hover { color:var(--ink); border-color:var(--lead); }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>"use strict";
+(() => {
+  // src/engine/time.ts
+  function parseTime(hhmm) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+    if (!m) throw new Error(`Invalid time: ${hhmm}`);
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+  function addMinutes(minutes, delta) {
+    return minutes + delta;
+  }
+  function formatTime(minutes) {
+    const dayOffset = Math.floor(minutes / 1440);
+    const norm = (minutes % 1440 + 1440) % 1440;
+    const h = Math.floor(norm / 60);
+    const mm = norm % 60;
+    const ap = h < 12 ? "AM" : "PM";
+    let h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    const suffix = dayOffset > 0 ? ` (+${dayOffset}d)` : "";
+    return `${h12}:${mm < 10 ? "0" : ""}${mm} ${ap}${suffix}`;
+  }
+
+  // src/engine/state.ts
+  function initState(story) {
+    var _a;
+    const vars = {};
+    for (const v of story.variables) vars[v.name] = v.default;
+    for (const r of (_a = story.resources) != null ? _a : []) vars[r.id] = r.start;
+    return {
+      time: parseTime(story.startTime),
+      location: story.startLocation,
+      clues: [],
+      inventory: [],
+      visited: [],
+      completedEvents: [],
+      vars
+    };
+  }
+  function readVar(s, field) {
+    if (field === "time") return s.time;
+    if (field === "location") return s.location;
+    return s.vars[field];
+  }
+
+  // src/engine/bounds.ts
+  function clampValue(n, b) {
+    if (!b) return n;
+    let v = n;
+    if (b.min !== void 0) v = Math.max(b.min, v);
+    if (b.max !== void 0) v = Math.min(b.max, v);
+    return v;
+  }
+  function buildBounds(story) {
+    var _a;
+    const m = {};
+    for (const v of story.variables) {
+      if (v.min !== void 0 || v.max !== void 0) m[v.name] = { min: v.min, max: v.max };
+    }
+    for (const r of (_a = story.resources) != null ? _a : []) {
+      m[r.id] = { min: r.min, max: r.max };
+    }
+    return m;
+  }
+
+  // src/engine/conditions.ts
+  function num(v) {
+    if (typeof v === "number") return v;
+    if (typeof v === "boolean") return v ? 1 : 0;
+    if (v == null) return 0;
+    const n = Number(v);
+    return Number.isNaN(n) ? 0 : n;
+  }
+  function coerce(v) {
+    if (v === "true") return true;
+    if (v === "false") return false;
+    if (v != null && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+    return v != null ? v : "";
+  }
+  function evaluateCondition(c, s) {
+    var _a, _b, _c, _d, _e, _f, _g;
+    const cur = readVar(s, c.field);
+    switch (c.op) {
+      case "equals":
+        return String(cur) === String(coerce(c.value));
+      case "not_equals":
+        return String(cur) !== String(coerce(c.value));
+      case "gt":
+        return num(cur) > num(coerce(c.value));
+      case "gte":
+        return num(cur) >= num(coerce(c.value));
+      case "lt":
+        return num(cur) < num(coerce(c.value));
+      case "lte":
+        return num(cur) <= num(coerce(c.value));
+      case "is_true":
+        return cur === true || cur === "true" || num(cur) > 0;
+      case "is_false":
+        return !(cur === true || cur === "true" || num(cur) > 0);
+      case "has_item":
+        return num(cur) >= (c.value != null ? num(coerce(c.value)) : 1);
+      case "has_clue":
+        return s.clues.includes((_a = c.value) != null ? _a : c.field);
+      case "has_visited":
+        return s.visited.includes((_b = c.value) != null ? _b : c.field);
+      case "time_before":
+        return s.time < parseTime((_c = c.value) != null ? _c : "00:00");
+      case "time_after":
+        return s.time >= parseTime((_d = c.value) != null ? _d : "00:00");
+      case "time_between": {
+        const range = ((_e = c.value) != null ? _e : "00:00-23:59").split("-");
+        const a = parseTime((_f = range[0]) != null ? _f : "00:00");
+        const b = parseTime((_g = range[1]) != null ? _g : "23:59");
+        return s.time >= a && s.time <= b;
+      }
+      default:
+        return true;
+    }
+  }
+  function evaluateConditions(cs, s) {
+    if (!cs || cs.length === 0) return true;
+    return cs.every((c) => evaluateCondition(c, s));
+  }
+  function explainFailing(cs, s) {
+    if (!cs) return "";
+    return cs.filter((c) => !evaluateCondition(c, s)).map((c) => `${c.field} ${c.op}${c.value != null ? " " + c.value : ""}`).join("; ");
+  }
+
+  // src/engine/effects.ts
+  function num2(v) {
+    if (typeof v === "number") return v;
+    if (typeof v === "boolean") return v ? 1 : 0;
+    if (v == null) return 0;
+    const n = Number(v);
+    return Number.isNaN(n) ? 0 : n;
+  }
+  function coerce2(v) {
+    if (v === "true") return true;
+    if (v === "false") return false;
+    if (v != null && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+    return v != null ? v : "";
+  }
+  function uniqPush(arr, x) {
+    return arr.includes(x) ? arr : [...arr, x];
+  }
+  function applyEffect(s, e, bounds) {
+    var _a, _b, _c, _d, _e, _f, _g;
+    switch (e.op) {
+      case "set": {
+        const v = coerce2(e.value);
+        const out = typeof v === "number" ? clampValue(v, bounds == null ? void 0 : bounds[e.field]) : v;
+        return { ...s, vars: { ...s.vars, [e.field]: out } };
+      }
+      case "increment": {
+        const v = num2(s.vars[e.field]) + num2(coerce2((_a = e.value) != null ? _a : "1"));
+        return { ...s, vars: { ...s.vars, [e.field]: clampValue(v, bounds == null ? void 0 : bounds[e.field]) } };
+      }
+      case "decrement": {
+        const v = num2(s.vars[e.field]) - num2(coerce2((_b = e.value) != null ? _b : "1"));
+        return { ...s, vars: { ...s.vars, [e.field]: clampValue(v, bounds == null ? void 0 : bounds[e.field]) } };
+      }
+      case "add_clue":
+        return { ...s, clues: uniqPush(s.clues, (_c = e.value) != null ? _c : e.field) };
+      case "remove_clue":
+        return { ...s, clues: s.clues.filter((x) => {
+          var _a2;
+          return x !== ((_a2 = e.value) != null ? _a2 : e.field);
+        }) };
+      case "add_item":
+        return { ...s, inventory: uniqPush(s.inventory, (_d = e.value) != null ? _d : e.field) };
+      case "remove_item":
+        return { ...s, inventory: s.inventory.filter((x) => {
+          var _a2;
+          return x !== ((_a2 = e.value) != null ? _a2 : e.field);
+        }) };
+      case "change_location":
+        return { ...s, location: (_e = e.value) != null ? _e : s.location };
+      case "add_minutes": {
+        const next = addMinutes(s.time, num2(coerce2(e.value)));
+        return { ...s, time: Math.max(s.time, next) };
+      }
+      case "adjust_resource": {
+        const key = `__roff_${e.field}`;
+        return { ...s, vars: { ...s.vars, [key]: num2(s.vars[key]) + num2(coerce2(e.value)) } };
+      }
+      case "mark_event_completed":
+        return { ...s, completedEvents: uniqPush(s.completedEvents, (_f = e.value) != null ? _f : e.field) };
+      case "mark_visited":
+        return { ...s, visited: uniqPush(s.visited, (_g = e.value) != null ? _g : e.field) };
+      default:
+        return s;
+    }
+  }
+  function applyEffects(s, es, bounds) {
+    if (!es) return s;
+    return es.reduce((acc, e) => applyEffect(acc, e, bounds), s);
+  }
+
+  // src/engine/resources.ts
+  function applyResourceStep(s, story, startTime) {
+    var _a, _b, _c;
+    const resources = (_a = story.resources) != null ? _a : [];
+    if (resources.length === 0) return { state: s, log: [] };
+    const vars = { ...s.vars };
+    let changed = false;
+    let atZeroEndingId;
+    const log = [];
+    for (const r of resources) {
+      const bound = { min: r.min, max: r.max };
+      let value;
+      if (r.depletion) {
+        const steps = Math.floor((s.time - startTime) / r.depletion.everyMinutes);
+        const offset = Number((_b = vars[`__roff_${r.id}`]) != null ? _b : 0);
+        value = clampValue(r.start - r.depletion.amount * steps + offset, bound);
+      } else {
+        value = clampValue(Number((_c = vars[r.id]) != null ? _c : r.start), bound);
+      }
+      if (vars[r.id] !== value) {
+        vars[r.id] = value;
+        changed = true;
+      }
+      if (value <= r.min && r.atZero) {
+        if (r.atZero.setFlag && vars[r.atZero.setFlag] !== true) {
+          vars[r.atZero.setFlag] = true;
+          changed = true;
+          log.push(`Resource ${r.id} hit ${r.min}: set ${r.atZero.setFlag}`);
+        }
+        if (r.atZero.ending && !atZeroEndingId) {
+          atZeroEndingId = r.atZero.ending;
+          log.push(`Resource ${r.id} hit ${r.min}: ending ${r.atZero.ending}`);
+        }
+      }
+    }
+    return { state: changed ? { ...s, vars } : s, atZeroEndingId, log };
+  }
+
+  // src/engine/endingResolver.ts
+  function resolveEndingAt(s, story, node, atZeroEndingId, pastDeadline) {
+    if ((node == null ? void 0 : node.endsWith) && !atZeroEndingId) {
+      const named = story.endings.find((e) => e.id === node.endsWith);
+      if (named) return named;
+    }
+    const candidates = story.endings.filter(
+      (e) => !e.isDefault && // a resource death (atZero) is ALWAYS a candidate — even if it doubles as the out-of-time ending; the
+      // out-of-time ending is excluded from the state-match path only (it otherwise fires via the deadline path).
+      (e.id === atZeroEndingId || e.id !== story.outOfTimeEndingId && evaluateConditions(e.conditions, s))
+    );
+    if (candidates.length) {
+      return candidates.reduce((best, e) => {
+        var _a, _b;
+        return ((_a = e.priority) != null ? _a : 0) > ((_b = best.priority) != null ? _b : 0) ? e : best;
+      });
+    }
+    if (pastDeadline && story.outOfTimeEndingId) {
+      const oot = story.endings.find((e) => e.id === story.outOfTimeEndingId);
+      if (oot) return oot;
+    }
+    return story.endings.find((e) => e.isDefault);
+  }
+
+  // src/engine/scheduledEvents.ts
+  function checkScheduledEvents(s, story, bounds) {
+    let state = s;
+    let routedNodeId;
+    const log = [];
+    for (const ev of story.events) {
+      if (state.completedEvents.includes(ev.id)) continue;
+      if (!evaluateConditions(ev.trigger, state)) continue;
+      if (state.location === ev.eventLocation) {
+        state = { ...state, completedEvents: [...state.completedEvents, ev.id] };
+        if (!routedNodeId) routedNodeId = ev.ifPresentNode;
+        log.push(`Event ${ev.id} fired (present) -> ${ev.ifPresentNode}`);
+      } else {
+        state = applyEffects(state, ev.ifAbsentEffects, bounds);
+        state = { ...state, completedEvents: [...state.completedEvents, ev.id] };
+        log.push(`Event ${ev.id} fired (absent); clue recoverable at ${ev.recoveryNodeId}`);
+      }
+    }
+    return { state, routedNodeId, log };
+  }
+
+  // src/engine/engine.ts
+  var GameEngine = class {
+    constructor(story) {
+      this.log = [];
+      this.story = story;
+      this.state = initState(story);
+      this.currentId = story.startNodeId;
+      this.deadline = parseTime(story.deadline);
+      this.startTime = parseTime(story.startTime);
+      this.bounds = buildBounds(story);
+      this.enter(this.currentId);
+    }
+    node(id) {
+      const n = this.story.nodes.find((x) => x.id === id);
+      if (!n) throw new Error(`Unknown node: ${id}`);
+      return n;
+    }
+    enter(id) {
+      this.currentId = id;
+      const n = this.node(id);
+      this.state = applyEffects(this.state, n.entryEffects, this.bounds);
+      if (!this.state.visited.includes(id)) {
+        this.state = { ...this.state, visited: [...this.state.visited, id] };
+      }
+      const res = checkScheduledEvents(this.state, this.story, this.bounds);
+      this.state = res.state;
+      if (res.log.length) this.log.push(...res.log);
+      if (res.routedNodeId && res.routedNodeId !== id) {
+        this.enter(res.routedNodeId);
+        return;
+      }
+      const rstep = applyResourceStep(this.state, this.story, this.startTime);
+      this.state = rstep.state;
+      if (rstep.log.length) this.log.push(...rstep.log);
+      const pastDeadline = this.state.time >= this.deadline;
+      if (!this.ending && (n.resolvesEnding || n.endsWith || rstep.atZeroEndingId || pastDeadline)) {
+        this.ending = resolveEndingAt(this.state, this.story, n, rstep.atZeroEndingId, pastDeadline);
+        if (this.ending) this.log.push(`Ending: ${this.ending.id}`);
+      }
+    }
+    start() {
+      return this.view();
+    }
+    view() {
+      const n = this.node(this.currentId);
+      const choices = (n.choices || []).map((c) => {
+        const ok = evaluateConditions(c.conditions, this.state);
+        return ok ? { id: c.id, label: c.label, available: true } : { id: c.id, label: c.label, available: false, lockedReason: explainFailing(c.conditions, this.state) };
+      });
+      return {
+        node: n,
+        time: this.state.time,
+        timeLabel: formatTime(this.state.time),
+        location: this.state.location,
+        choices,
+        state: this.state,
+        log: [...this.log],
+        endingReached: this.ending
+      };
+    }
+    choose(choiceId) {
+      if (this.ending) return this.view();
+      const n = this.node(this.currentId);
+      const choice = (n.choices || []).find((c) => c.id === choiceId);
+      if (!choice) throw new Error(`Unknown choice: ${choiceId}`);
+      if (!evaluateConditions(choice.conditions, this.state)) {
+        throw new Error(`Choice not available: ${choiceId}`);
+      }
+      this.state = applyEffects(this.state, choice.effects, this.bounds);
+      this.enter(choice.destination);
+      return this.view();
+    }
+    snapshot() {
+      var _a;
+      return {
+        version: 1,
+        storyId: this.story.id,
+        currentId: this.currentId,
+        state: JSON.parse(JSON.stringify(this.state)),
+        log: [...this.log],
+        endingId: (_a = this.ending) == null ? void 0 : _a.id
+      };
+    }
+    restore(snap) {
+      if (snap.version !== 1) throw new Error(`Unsupported snapshot version: ${snap.version}`);
+      if (snap.storyId !== this.story.id) {
+        throw new Error(`Snapshot is for story ${snap.storyId}, not ${this.story.id}`);
+      }
+      this.state = JSON.parse(JSON.stringify(snap.state));
+      this.currentId = snap.currentId;
+      this.log = [...snap.log];
+      this.ending = snap.endingId ? this.story.endings.find((e) => e.id === snap.endingId) : void 0;
+    }
+    gotoNode(id) {
+      this.enter(id);
+      return this.view();
+    }
+  };
+
+  // src/experiments/sump-line/carry.ts
+  function minutesToClock(min) {
+    const m = Math.max(0, Math.round(min));
+    const hh = Math.floor(m / 60);
+    const mm = m % 60;
+    return `${hh}:${mm < 10 ? "0" : ""}${mm}`;
+  }
+  function extractCarry(state, contract) {
+    const vars = {};
+    if (contract.vars === "all") Object.assign(vars, state.vars);
+    else for (const k of contract.vars) if (k in state.vars) vars[k] = state.vars[k];
+    for (const id of contract.resources) if (id in state.vars) vars[id] = state.vars[id];
+    return {
+      vars,
+      clues: contract.clues === false ? [] : [...state.clues],
+      inventory: contract.inventory === false ? [] : [...state.inventory]
+    };
+  }
+  function seedChapterStory(story, carry, gameElapsedMinutes, gameDeadlineMinutes) {
+    var _a, _b;
+    const s = JSON.parse(JSON.stringify(story));
+    for (const v of s.variables) {
+      if (Object.prototype.hasOwnProperty.call(carry.vars, v.name)) v.default = carry.vars[v.name];
+    }
+    for (const r of (_a = s.resources) != null ? _a : []) {
+      if (Object.prototype.hasOwnProperty.call(carry.vars, r.id)) r.start = Number(carry.vars[r.id]);
+    }
+    const start = s.nodes.find((n) => n.id === s.startNodeId);
+    if (start) {
+      const seedEffects = [
+        ...carry.clues.map((c) => ({ field: "clues", op: "add_clue", value: c })),
+        ...carry.inventory.map((i) => ({ field: "inventory", op: "add_item", value: i }))
+      ];
+      start.entryEffects = [...seedEffects, ...(_b = start.entryEffects) != null ? _b : []];
+    }
+    if (gameDeadlineMinutes !== void 0) {
+      const chapterStart = parseTime(s.startTime);
+      const projected = chapterStart + Math.max(0, gameDeadlineMinutes - gameElapsedMinutes);
+      const eff = Math.max(chapterStart, Math.min(parseTime(s.deadline), projected));
+      s.deadline = minutesToClock(eff);
+    }
+    return s;
+  }
+
+  // src/experiments/sump-line/transitions.ts
+  function pickNextChapter(chapter, finalState, endingId) {
+    for (const t of chapter.transitions) {
+      if (t.when.endingId !== void 0 && t.when.endingId !== endingId) continue;
+      if (t.when.conditions && !evaluateConditions(t.when.conditions, finalState)) continue;
+      return t.goTo;
+    }
+    return void 0;
+  }
+
+  // src/experiments/sump-line/GameRunner.ts
+  var EMPTY_CARRY = { vars: {}, clues: [], inventory: [] };
+  var MAX_TRANSITIONS = 1e3;
+  var GameRunner = class {
+    constructor(game) {
+      this.currentChapterId = "";
+      this.carriedIn = EMPTY_CARRY;
+      this.gameElapsedMinutes = 0;
+      this.gameOver = false;
+      this.transitionCount = 0;
+      this.game = game;
+      this.startChapter(game.startChapterId, EMPTY_CARRY);
+    }
+    chapter(id) {
+      const c = this.game.chapters.find((x) => x.id === id);
+      if (!c) throw new Error(`Unknown chapter: ${id}`);
+      return c;
+    }
+    startChapter(chapterId, carry) {
+      const ch = this.chapter(chapterId);
+      this.currentChapterId = chapterId;
+      this.carriedIn = carry;
+      const seeded = seedChapterStory(ch.story, carry, this.gameElapsedMinutes, this.game.gameDeadlineMinutes);
+      this.engine = new GameEngine(seeded);
+      this.settle();
+    }
+    // If the current chapter has ended, bank its elapsed time and transition (recursively).
+    settle() {
+      const v = this.engine.view();
+      if (!v.endingReached || this.gameOver) return;
+      const ch = this.chapter(this.currentChapterId);
+      this.gameElapsedMinutes += v.state.time - parseTime(ch.story.startTime);
+      if (ch.gameEnding) {
+        this.gameOver = true;
+        this.finalEndingId = v.endingReached.id;
+        return;
+      }
+      if (++this.transitionCount > MAX_TRANSITIONS) {
+        throw new Error(`Transition limit exceeded near chapter ${this.currentChapterId} (cycle?)`);
+      }
+      const carry = extractCarry(v.state, this.game.carry);
+      const next = pickNextChapter(ch, v.state, v.endingReached.id);
+      if (!next) {
+        this.gameOver = true;
+        this.finalEndingId = v.endingReached.id;
+        return;
+      }
+      this.startChapter(next, carry);
+    }
+    start() {
+      return this.view();
+    }
+    view() {
+      const v = this.engine.view();
+      const ch = this.chapter(this.currentChapterId);
+      return {
+        ...v,
+        chapterId: this.currentChapterId,
+        chapterTitle: ch.title,
+        gameElapsedMinutes: this.gameElapsedMinutes,
+        gameOver: this.gameOver,
+        finalEndingId: this.finalEndingId
+      };
+    }
+    choose(choiceId) {
+      if (this.gameOver) return this.view();
+      this.engine.choose(choiceId);
+      this.settle();
+      return this.view();
+    }
+    snapshot() {
+      return {
+        gameId: this.game.id,
+        currentChapterId: this.currentChapterId,
+        gameElapsedMinutes: this.gameElapsedMinutes,
+        carriedIn: JSON.parse(JSON.stringify(this.carriedIn)),
+        chapter: this.engine.snapshot()
+      };
+    }
+    // Restore expects a snapshot taken DURING play (no pending un-transitioned ending).
+    // FINDING (ENGINE-ASSESSMENT): the engine snapshots one chapter; the game snapshot wraps it with
+    // chapter id + game clock + the carry that seeded the chapter.
+    restore(snap) {
+      if (snap.gameId !== this.game.id) throw new Error(`Snapshot is for game ${snap.gameId}, not ${this.game.id}`);
+      this.gameElapsedMinutes = snap.gameElapsedMinutes;
+      this.currentChapterId = snap.currentChapterId;
+      this.carriedIn = snap.carriedIn;
+      this.gameOver = false;
+      this.finalEndingId = void 0;
+      const ch = this.chapter(snap.currentChapterId);
+      const seeded = seedChapterStory(ch.story, snap.carriedIn, snap.gameElapsedMinutes, this.game.gameDeadlineMinutes);
+      this.engine = new GameEngine(seeded);
+      this.engine.restore(snap.chapter);
+    }
+  };
+
+  // src/experiments/countinghouse/content/ch1WayIn.ts
+  var ch1WayIn = {
+    id: "ch1_wayin",
+    title: "The Way In",
+    startNodeId: "n_street",
+    startTime: "23:00",
+    deadline: "24:10",
+    // window 70; absolute minutes past midnight for the after-midnight literal
+    startLocation: "street",
+    variables: [
+      { name: "entry_route", type: "string", default: "quiet", purpose: "The Floor fork: 'quiet' | 'loud'. Carried; gates content." },
+      { name: "partner_status", type: "string", default: "steady", purpose: "The boxman: 'steady'|'frayed'|'hurt'|'gone'. Carries across chapters; domain-checked; gates endings." },
+      { name: "made_clean", type: "boolean", default: false, purpose: "Latching: worked the floor without tripping the alarm. Mutex with alarm_tripped." },
+      { name: "alarm_tripped", type: "boolean", default: false, purpose: "Latching: the alarm went. Mutex with made_clean." },
+      { name: "lead_blown", type: "boolean", default: false, purpose: "Latching, paired with The Lead at zero. The Outfit ending (ch2) requires it." },
+      // Counted inventory — items are number vars tagged kind:'item'.
+      { name: "charges", type: "number", kind: "item", default: 1, min: 0, max: 2, label: "Charges", purpose: "breaching charges for the box" },
+      { name: "loot", type: "number", kind: "item", default: 0, min: 0, max: 4, label: "The Take", purpose: "bundles of cash from the box; how much you grab trades against time" }
+    ],
+    locations: [
+      { id: "street", name: "The Street" },
+      { id: "service_door", name: "The Service Door" },
+      { id: "count_floor", name: "The Counting Floor" },
+      { id: "safe_room", name: "The Box Room" },
+      { id: "stairwell", name: "The Stairwell" }
+    ],
+    resources: [
+      // THE LEAD — your head start on the heat. Time-driven (falls); raised/spent only via adjust_resource.
+      // atZero sets the flag ONLY in ch1 (non-game-ending); the death itself resolves in ch2.
+      { id: "lead", label: "Lead", min: 0, max: 60, start: 40, depletion: { everyMinutes: 10, amount: 5 }, atZero: { setFlag: "lead_blown" } }
+    ],
+    events: [],
+    nodes: [
+      // ===== PHASE 1 — THE WAY IN =====
+      {
+        id: "n_street",
+        title: "The Street",
+        type: "scene",
+        location: "street",
+        entryEffects: [{ field: "location", op: "change_location", value: "street" }],
+        body: `The countinghouse keeps bankers' hours in a building that doesn't. From across the street it is a laundry with the lights off and a second floor that never quite goes dark \u2014 a slot of yellow at the edge of a drawn blind, and behind the blind the outfit's money getting counted into the small hours by men who are good with numbers and nothing else. It is {{time}}.
+
+The boxman is in the car beside you with his hands in his lap, not smoking, because he gave it up the way he gives everything up: all at once and for good. "Two ways in," he says, not a question. You have looked at both for a month. The quiet way is the service door and a long patient hour of nobody noticing. The loud way is faster, and fast does not forgive.
+
+You watch the slot of yellow light and you do the arithmetic one more time, the way you always do, because the arithmetic is the job and the rest is just nerve. There is time, if you want it, to sit on the place a while longer and learn how the night moves before you walk into it.`,
+        choices: [
+          { id: "c_case", label: "Sit on the place \u2014 learn the patrol and the count-crew before you move.", destination: "n_case", effects: [{ field: "time", op: "add_minutes", value: "10" }, { field: "lead", op: "adjust_resource", value: "15" }] },
+          { id: "c_approach", label: "Enough watching. Cross to the building.", destination: "n_approach", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_case",
+        title: "Sitting on the Place",
+        type: "discovery",
+        location: "street",
+        entryEffects: [{ field: "location", op: "change_location", value: "street" }],
+        body: 'You sit on the place the way the old hands taught you, low in the seat, eyes soft, letting the night show you its shape instead of going looking for it.\n\nAnd it shows you. A prowl car that comes by on a slow loop and the size of the gap it leaves behind it. The count-crew on the second floor, four of them, the rhythm of their cigarettes at the window. The beat cop who tries the laundry door at the quarter-hour out of nothing but habit, and the long dead stretch after he has done it. None of it is a way in by itself. All of it together is a map of the minutes \u2014 where the night looks away, and for how long, and how much of a head start a careful man can steal out of the spaces between other men paying attention.\n\nThe boxman watches you watch. "You got it?" he says. You have it. You always get it; getting it is the part you are good at. The margin is there to be taken, and you take it, and tuck it away against the hour when you will need it.',
+        choices: [
+          { id: "c_case_on", label: "You have the night\u2019s shape. Cross to the building.", destination: "n_approach", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_approach",
+        title: "The Service Door",
+        type: "scene",
+        location: "service_door",
+        entryEffects: [{ field: "location", op: "change_location", value: "service_door" }],
+        body: "You cross the street in the dead stretch and put your back to the brick beside the service door, and the boxman comes after you soft-footed for a big man, his kit slung close.\n\nHere is where the night forks, and you both know it without saying. The service door gives onto a stair and a quiet hour of working the building the way it wants to be worked \u2014 slow, unseen, the alarm left sleeping. Or there is the freight shutter around the side, which gives quick and gives loud, and once you have gone loud the building knows you are in it and the clock starts running a different, meaner kind of time.\n\nThe boxman flexes his hands against the cold. He will go whichever way you call. That is the deal between you, fifteen years old and never once said out loud: you do the arithmetic, he opens the box, and neither of you leaves without the other.",
+        choices: [
+          { id: "c_quiet", label: "The service door. Quiet, slow, the alarm left sleeping.", destination: "n_floor_quiet", effects: [{ field: "time", op: "add_minutes", value: "10" }, { field: "entry_route", op: "set", value: "quiet" }] },
+          { id: "c_loud", label: "The freight shutter. Fast and loud \u2014 take the building before it wakes.", destination: "n_floor_loud", effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "entry_route", op: "set", value: "loud" }] }
+        ]
+      },
+      // ===== PHASE 2 — THE FLOOR (route-exclusive) =====
+      {
+        id: "n_floor_quiet",
+        title: "The Counting Floor \u2014 Quiet",
+        type: "scene",
+        location: "count_floor",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "count_floor" },
+          { field: "made_clean", op: "set", value: "true" },
+          { field: "lead", op: "adjust_resource", value: "10" }
+          // cutting the relay buys margin
+        ],
+        body: "The service door gives to the boxman in under a minute, the way you knew it would, and you go up the back stair into the smell of the place \u2014 old paper, cold coffee, the particular dust of money that has been handled too much.\n\nThe alarm box is where the plans said it would be, and the boxman opens it and lifts the relay out of its seat with two fingers and a steadiness you have never once seen him lose, and just like that the building is asleep and does not know it. No bell. No call downtown. Whatever happens on this floor now happens in private, between you and the count-crew above and the time you have bought yourselves by being quiet.\n\nYou let out a breath you did not know you were holding. Clean. The hard way, the patient way, the way that leaves you the most room. Ahead, past the long tables and their banded stacks, is the door to the box room.",
+        choices: [
+          { id: "c_quiet_on", label: "On to the box room.", destination: "n_box", effects: [{ field: "time", op: "add_minutes", value: "10" }] }
+        ]
+      },
+      {
+        id: "n_floor_loud",
+        title: "The Counting Floor \u2014 Loud",
+        type: "scene",
+        location: "count_floor",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "count_floor" },
+          { field: "alarm_tripped", op: "set", value: "true" },
+          { field: "lead", op: "adjust_resource", value: "-12" }
+          // the building wakes; you are already behind
+        ],
+        body: "The freight shutter comes up loud, a long iron complaint that no amount of grease was ever going to soften, and somewhere in the wall a contact you did not have time to find closes a circuit, and the building wakes.\n\nThere is no bell on the floor \u2014 the bell is downtown, on a desk, where a bored man is sitting up straighter now and reaching for a phone. You feel the change in the air the way you feel weather coming. You are in, fast, the way you wanted; but the building knows you are in it now, and the count-crew above has heard the shutter, and the long patient hour you might have had is gone before it started. From here it is a race, and you started it a step behind.\n\nThe boxman is already moving, kit out, no time spent on regret. The box room is ahead, past the tables. Whatever you take, you take fast.",
+        choices: [
+          { id: "c_loud_on", label: "On to the box room \u2014 move.", destination: "n_box", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      // ===== PHASE 3 — THE BOX =====
+      {
+        id: "n_box",
+        title: "The Box",
+        type: "scene",
+        location: "safe_room",
+        entryEffects: [{ field: "location", op: "change_location", value: "safe_room" }],
+        body: 'The box is an old Mosler the size of a wardrobe, sunk into the back wall of a windowless room, and it is the reason there are two of you and not one.\n\nThe boxman stands in front of it the way some men stand in front of a painting, reading it, his head tilted, his bare hands flat against the cold steel of the door. "She\u2019s a good one," he says, almost fond. There are two ways through her, and they cost different currencies. He can work her \u2014 the dial, the long patient listening, the feel of the wheels dropping into line \u2014 and that costs time, which is the one thing the night keeps taking from you. Or you can put a charge to the hinge and open her the fast way, which costs a charge, and you are carrying only what you are carrying.',
+        choices: [
+          { id: "c_blow", label: "Blow the hinge \u2014 spend a charge, open her fast.", destination: "n_grab1", conditions: [{ field: "charges", op: "has_item" }], effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "charges", op: "decrement", value: "1" }] },
+          { id: "c_work", label: "Let the boxman work her \u2014 slow, silent, no charge spent.", destination: "n_grab1", effects: [{ field: "time", op: "add_minutes", value: "20" }] }
+        ]
+      },
+      {
+        id: "n_grab1",
+        title: "The Take",
+        type: "scene",
+        location: "safe_room",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "safe_room" },
+          { field: "loot", op: "increment", value: "1" }
+        ],
+        body: 'The door swings and the inside of her is exactly what a month of arithmetic promised: the outfit\u2019s week, banded and stacked and smelling of other people\u2019s hands, more of it than two men can carry and a great deal more than two men can carry fast.\n\nYou take the first bundle and put it away, and your heart does the thing it always does, the lift and the warning both at once. Every bundle after the first is the same arithmetic running the other way now: more take, less night. The boxman has his eyes on the door and his hands open. "How much," he says, not really a question, "is enough." You have never once known the answer to that. It is the whole problem of the work, in five words.',
+        choices: [
+          { id: "c_more1", label: "Not yet \u2014 take more.", destination: "n_grab2", effects: [{ field: "time", op: "add_minutes", value: "5" }] },
+          { id: "c_enough1", label: "Enough. Pocket it and move.", destination: "n_turn", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_grab2",
+        title: "More",
+        type: "scene",
+        location: "safe_room",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "safe_room" },
+          { field: "loot", op: "increment", value: "1" }
+        ],
+        body: "You take more. Of course you take more. The second armful goes against your chest under your coat and the weight of it is a good weight, the weight of the thing being worth it, the weight of not having come all this way for a taste.\n\nBut the room is louder now in the way a room gets when you have been in it too long \u2014 the building settling, a pipe somewhere, the count-crew\u2019s floor creaking overhead as men move around up there not yet sure what they heard. The boxman shifts his weight. He will not say the word. Saying the word is your job, and he is waiting on you to do it, the way he has waited fifteen years.",
+        choices: [
+          { id: "c_more2", label: "The whole till \u2014 clean her out.", destination: "n_grab3", effects: [{ field: "time", op: "add_minutes", value: "5" }] },
+          { id: "c_enough2", label: "That\u2019s the number. Move.", destination: "n_turn", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_grab3",
+        title: "The Whole Till",
+        type: "scene",
+        location: "safe_room",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "safe_room" },
+          { field: "loot", op: "increment", value: "1" }
+        ],
+        body: 'You clean her out. The last of it, the back of the box, the bands at the bottom that nobody bothers to count because nobody was ever supposed to get this far \u2014 all of it, into the bags, until the Mosler is a cold empty room with the door hanging open and you are carrying the outfit\u2019s entire week on your two backs.\n\nIt is the whole take. It is everything you came for and more than you let yourself plan for, and it is heavy, in the hand and in the chest both. The boxman straightens up with the last bag and looks at you and for half a second there is nothing on his face but the old grin, the one from before either of you knew better. "Greedy," he says, and means it as the highest praise there is.',
+        choices: [
+          { id: "c_done", label: "Everything. Now get out.", destination: "n_turn", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      // ===== THE GONE-SIDEWAYS TURN =====
+      {
+        id: "n_turn",
+        title: "Early",
+        type: "event",
+        location: "safe_room",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "safe_room" },
+          { field: "partner_status", op: "set", value: "frayed" },
+          { field: "clues", op: "add_clue", value: "clue_crew_early" }
+        ],
+        body: 'You hear the street door before you understand it \u2014 the particular complaint of a hinge you cased for a month and know the voice of \u2014 and then the stairs, more than one man, unhurried, the sound of people who belong here coming back to a place that is theirs.\n\nThe count-crew. Early. Nobody is early in this business; early is a thing that happens to other people, and now it is happening to you, with the box open and the take in your hands and the only door the one the footsteps are climbing toward. The boxman has gone the grey of old putty. "They don\u2019t come back till four," he says \u2014 to you, to the room, to the arithmetic that just stopped being true.\n\nIt does not matter now what was supposed to happen. What matters is the stairs, and the count of them, and how few are left.',
+        choices: [
+          { id: "c_run", label: "The back stair \u2014 go, now, before they top the landing.", destination: "n_commit", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_commit",
+        title: "The Back Stair",
+        type: "transition",
+        location: "stairwell",
+        resolvesEnding: true,
+        entryEffects: [{ field: "location", op: "change_location", value: "stairwell" }],
+        body: "You go for the back stair with the take against your chest and the boxman\u2019s breath loud behind you, and the count-crew\u2019s voices turning puzzled and then hard in the room you just left.\n\nThe stairwell drops away into the cold dark below, down toward the lot and the car and whatever the rest of the night has decided to be. You are out of the count-room. That much is done, one way or the other. What you carry, you carry; what is ahead is the getting clear, and the night has not yet said whether it will let you.",
+        choices: []
+      }
+    ],
+    endings: [
+      {
+        // Neutral by design: a deadline-cross can resolve this at loot 0, so it must NOT assert "you have the take".
+        id: "end_ch1_out",
+        name: "Out of the Count-Room",
+        summary: "You are clear of the count-room, the night not yet decided.",
+        isDefault: true,
+        conditions: []
+      }
+    ]
+  };
+
+  // src/experiments/countinghouse/content/ch2WayOut.ts
+  var ch2WayOut = {
+    id: "ch2_wayout",
+    title: "The Way Out",
+    startNodeId: "n_out_start",
+    startTime: "23:55",
+    deadline: "24:45",
+    // window 50; absolute minutes past midnight
+    startLocation: "stairwell",
+    outOfTimeEndingId: "end_dawn",
+    variables: [
+      { name: "partner_status", type: "string", default: "steady", purpose: "The boxman: 'steady'|'frayed'|'hurt'|'gone'. Carried; gates the finales." },
+      { name: "made_clean", type: "boolean", default: true, purpose: "Latching (carried): came in clean. Default TRUE standalone for walkability; the container rebases it. Mutex with alarm_tripped." },
+      { name: "alarm_tripped", type: "boolean", default: false, purpose: "Latching (carried): the alarm went. Mutex with made_clean." },
+      { name: "lead_blown", type: "boolean", default: false, purpose: "Latching, paired with The Lead at zero. The Outfit ending requires it." },
+      { name: "got_clear", type: "boolean", default: false, purpose: "Latching: you DROVE away. Every getaway finale requires it so a deadline-cross before the drive cannot claim the car (F1)." },
+      // Carried items (declared so the carry surface matches ch1).
+      { name: "charges", type: "number", kind: "item", default: 1, min: 0, max: 2, label: "Charges", purpose: "carried; unused this chapter" },
+      { name: "loot", type: "number", kind: "item", default: 0, min: 0, max: 4, label: "The Take", purpose: "carried take; gates the clean finale" }
+    ],
+    locations: [
+      { id: "stairwell", name: "The Back Stair" },
+      { id: "loading_dock", name: "The Loading Dock" },
+      { id: "alley", name: "The Alley" },
+      { id: "getaway_car", name: "The Car" }
+    ],
+    resources: [
+      // THE LEAD — now lethal: atZero resolves The Outfit (this is a game-ending chapter). Same bounds as ch1
+      // so the container's carried-value rebase doesn't clamp.
+      { id: "lead", label: "Lead", min: 0, max: 60, start: 40, depletion: { everyMinutes: 10, amount: 5 }, atZero: { ending: "end_outfit", setFlag: "lead_blown" } }
+    ],
+    events: [],
+    nodes: [
+      {
+        id: "n_out_start",
+        title: "Down the Stair",
+        type: "scene",
+        location: "stairwell",
+        entryEffects: [{ field: "location", op: "change_location", value: "stairwell" }],
+        body: "The back stair takes you down two at a time into the cold, the take heavy against you, the boxman a half-flight behind and breathing like a bellows. Above, the count-crew has stopped being puzzled and started being organized; you can hear it in the way the voices have dropped and spread out.\n\nDown is good. Down is away from them. But down is also into the body of the building, and the building belongs to the outfit, and the only thing you have on the outfit tonight is the head start you spent the whole job buying yourself, minute by minute, in a currency the night keeps quietly spending back. However much of it you have left, this is where it starts to matter.",
+        choices: [
+          { id: "c_to_stair", label: "Down to the dock level.", destination: "n_stair", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_stair",
+        title: "The Bottom of the Stair",
+        type: "scene",
+        location: "stairwell",
+        entryEffects: [{ field: "location", op: "change_location", value: "stairwell" }],
+        body: "At the bottom the stair gives onto a service corridor and, past it, the loading dock and the alley and \u2014 if the night has gone the way you need it to \u2014 the car.\n\nHow you go from here depends on how you came in. If you came clean, the building still half-believes it is empty, and you can move through it quiet and unhurried, the way a man moves who has every right to be where he is. If you came loud, the building knows, and quiet is a luxury you spent at the freight shutter; now it is just speed and nerve and the door at the far end.",
+        choices: [
+          { id: "c_slip", label: "Slip through quiet \u2014 the building still thinks it\u2019s asleep.", destination: "n_lot", conditions: [{ field: "made_clean", op: "is_true" }], effects: [{ field: "time", op: "add_minutes", value: "10" }, { field: "lead", op: "adjust_resource", value: "10" }] },
+          { id: "c_force", label: "No time for quiet \u2014 force the corridor and run.", destination: "n_lot", conditions: [{ field: "alarm_tripped", op: "is_true" }], effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "lead", op: "adjust_resource", value: "-10" }] }
+        ]
+      },
+      {
+        id: "n_lot",
+        title: "The Loading Dock",
+        type: "scene",
+        location: "loading_dock",
+        entryEffects: [{ field: "location", op: "change_location", value: "loading_dock" }],
+        body: "The loading dock is a concrete mouth open on the alley, and between you and the mouth is the one thing your month of arithmetic did not put on the map: a man from the count-crew, sent down the front while the others worked the floor, standing now at the head of the dock with his back to you and a question in the set of his shoulders.\n\nThe boxman has stopped dead at your side. The ankle of the night, the thing gone wrong \u2014 here it is, in a man who has not seen you yet, between you and the alley. You can take the time to bring the boxman through it with you, slow and careful and together, the way the deal says. Or you can go now, alone, fast, and leave the slower man to the dock and the dark and whatever the count-crew does to men it finds where you have been.",
+        choices: [
+          { id: "c_cover", label: "Bring the boxman through with you \u2014 slow, together.", destination: "n_approach_car", effects: [{ field: "time", op: "add_minutes", value: "15" }] },
+          { id: "c_leave", label: "Go now, alone \u2014 the boxman is too slow for this.", destination: "n_leave", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_leave",
+        title: "Alone",
+        type: "scene",
+        location: "loading_dock",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "loading_dock" },
+          { field: "partner_status", op: "set", value: "gone" }
+        ],
+        body: "You go alone, and you go fast, low and quick along the dock\u2019s edge while the man at the head of it is still working out what his ears told him, and you are past him and into the alley before the boxman has finished understanding what you decided.\n\nYou do not look back. Looking back is for men who can afford it. Behind you, in the concrete dark of the dock, the boxman is on the wrong side of a decision you made in the half-second the night gave you to make it, and that is his now, the particular weight of it, the same way the take is yours. Fifteen years, and it comes down to a corridor and a count of seconds and which of you could move faster. You carry that out into the alley with the rest of what you are carrying.",
+        choices: [
+          { id: "c_leave_on", label: "Into the alley.", destination: "n_approach_car", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_approach_car",
+        title: "The Alley",
+        type: "scene",
+        location: "alley",
+        entryEffects: [{ field: "location", op: "change_location", value: "alley" }],
+        body: "The alley runs black and narrow toward the street, and somewhere down it, nosed in against a dead streetlight where you left it, is the car. This is the last of it. This is the stretch where men get caught who had the whole rest of it clean, because they hurried wrong or waited wrong or stood a half-second too long deciding.\n\nThe night is thinning at its edges. Not light yet \u2014 but the particular grey thinness that comes before light, the hour when the city\u2019s own machinery starts to wake and the cover of the dark starts handing itself back. Whatever lead you have left, you spend the last of it here, getting to the car before the night decides it is finished with you.",
+        choices: [
+          { id: "c_dash", label: "Straight down the alley to the car.", destination: "n_car", effects: [{ field: "time", op: "add_minutes", value: "10" }] },
+          { id: "c_circle", label: "Don\u2019t trust the straight line \u2014 circle the block once and come at it clean.", destination: "n_circle", effects: [{ field: "time", op: "add_minutes", value: "20" }] },
+          { id: "c_wait", label: "Wait \u2014 let the alley settle before you commit to it.", destination: "n_approach_car", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_circle",
+        title: "The Long Way",
+        type: "scene",
+        location: "alley",
+        entryEffects: [{ field: "location", op: "change_location", value: "alley" }],
+        body: "You don\u2019t trust the straight line \u2014 the straight line is where they expect you \u2014 so you take the long way, around the block, hugging the dark, coming at the car from the side the night is quietest on.\n\nIt is the careful play, and careful costs what careful always costs: time, which is the one thing the thinning sky is taking from you faster now. Every doorway you ghost past is a doorway you are not yet in the car, and the grey at the edge of the world comes up another notch while you do the prudent thing. There is a version of tonight where this is the move that saves you, and a version where it is the move that finishes you, and you will not know which until you turn the last corner.",
+        choices: [
+          { id: "c_circle_on", label: "Around the last corner to the car.", destination: "n_car", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_car",
+        title: "The Car",
+        type: "scene",
+        location: "getaway_car",
+        // NOTE: does NOT set got_clear — the getaway is the DRIVE, not arriving here (F1 honesty).
+        entryEffects: [{ field: "location", op: "change_location", value: "getaway_car" }],
+        body: "And there it is, nosed in against the dead streetlight exactly where you left it, cold and dark and dumb and the most beautiful thing you have ever seen. You get the door and get in and get the take down off your chest and your hands are doing the small familiar things, the key, the choke, the wheel, while some larger part of you is just saying the one word over and over: car, car, car.\n\nThis is the line. Everything up to here is just a building you were in. The moment the engine turns and the wheels move, you are a man driving away in the grey before dawn, and what kind of man that is \u2014 whole, or light, or alone \u2014 is the last thing the night is going to ask you, and it is going to ask it now.",
+        choices: [
+          { id: "c_drive_clean", label: "Drive \u2014 the take whole, the boxman beside you.", destination: "n_end_clean", conditions: [{ field: "partner_status", op: "not_equals", value: "gone" }, { field: "loot", op: "gte", value: "3" }], effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "got_clear", op: "set", value: "true" }] },
+          { id: "c_drive_light", label: "Drive \u2014 lighter than you wanted, but you\u2019re both in.", destination: "n_end_lighter", conditions: [{ field: "partner_status", op: "not_equals", value: "gone" }, { field: "loot", op: "lt", value: "3" }], effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "got_clear", op: "set", value: "true" }] },
+          { id: "c_drive_alone", label: "Drive \u2014 the seat beside you empty.", destination: "n_end_not_whole", conditions: [{ field: "partner_status", op: "equals", value: "gone" }], effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "got_clear", op: "set", value: "true" }] }
+        ]
+      },
+      {
+        id: "n_end_clean",
+        title: "Clean Away",
+        type: "transition",
+        location: "getaway_car",
+        endsWith: "end_clean",
+        entryEffects: [{ field: "location", op: "change_location", value: "getaway_car" }, { field: "got_clear", op: "set", value: "true" }],
+        body: "The engine turns and the wheels bite and the dead streetlight slides away behind you, and the countinghouse with it, and the whole long arithmetical night.",
+        choices: []
+      },
+      {
+        id: "n_end_lighter",
+        title: "Away, Lighter",
+        type: "transition",
+        location: "getaway_car",
+        endsWith: "end_lighter",
+        entryEffects: [{ field: "location", op: "change_location", value: "getaway_car" }, { field: "got_clear", op: "set", value: "true" }],
+        body: "The engine turns and you pull away, the take lighter against your chest than it might have been, the boxman breathing beside you, the streetlight falling behind.",
+        choices: []
+      },
+      {
+        id: "n_end_not_whole",
+        title: "Out, Not Whole",
+        type: "transition",
+        location: "getaway_car",
+        endsWith: "end_not_whole",
+        entryEffects: [{ field: "location", op: "change_location", value: "getaway_car" }, { field: "got_clear", op: "set", value: "true" }],
+        body: "The engine turns and you drive, the seat beside you empty, the streetlight and the dock and the man you left behind it all sliding back into the grey.",
+        choices: []
+      }
+    ],
+    endings: [
+      {
+        id: "end_outfit",
+        name: "The Outfit's Math",
+        summary: "The Lead hit zero \u2014 the margin gone, and you in their building. The outfit takes you.",
+        priority: 2,
+        conditions: [{ field: "lead_blown", op: "is_true" }],
+        body: "It is not personal, and that is the worst of it. The outfit does the sum the way it does every sum \u2014 what was taken, what it costs to take it back, what the difference buys in the way of a message \u2014 and you are a line in the ledger now, a number carried from one column to another in a room that smells of cold coffee and other people\u2019s money.\n\nThere is no speech. Men who are good with numbers do not make speeches. Somewhere out in the night the boxman is running, or is not; the building has stopped being your problem and become arithmetic, and arithmetic does not hurry and does not miss. The margin you spent the whole night buying back, minute by minute, is spent. The lead is gone.\n\nThey have you, and they have all the time the books allow \u2014 which is exactly as much as they need, and not one minute more."
+      },
+      {
+        id: "end_clean",
+        name: "Clean Away",
+        summary: "Out, the take whole, the boxman beside you \u2014 rattled, breathing, alive.",
+        priority: 0,
+        conditions: [{ field: "got_clear", op: "is_true" }, { field: "partner_status", op: "not_equals", value: "gone" }, { field: "loot", op: "gte", value: "3" }],
+        body: "You drive. Not fast \u2014 fast is how you get noticed \u2014 just steady, a man and his friend in a cold car in the grey before dawn, going nowhere in particular at a sensible speed, with the outfit\u2019s entire week in bags on the back seat.\n\nThe boxman is shaking, a little, the fine constant tremor of a man who has just spent everything he had. He is not steady. He will not be steady for a while; the count-crew on the stairs put something into him tonight that does not come straight back out. But he is here, in the seat beside you, whole, breathing, alive, and his hand when it finds yours on the gearstick grips hard and says the thing neither of you will ever say out loud. You went in together. You came out together. The take is the whole take.\n\nBehind you the countinghouse goes on being a laundry with the lights off, and the city wakes up around the fact of what is gone from it, and you drive into the grey having done a thing that men will tell wrong in club rooms for thirty years. Whole. The both of you. Tonight, that is everything there is."
+      },
+      {
+        id: "end_lighter",
+        name: "Away, Lighter",
+        summary: "Out together \u2014 but you left some of it in the box to do it.",
+        priority: 0,
+        conditions: [{ field: "got_clear", op: "is_true" }, { field: "partner_status", op: "not_equals", value: "gone" }, { field: "loot", op: "lt", value: "3" }],
+        body: "You drive, and the bags on the back seat are lighter than they might have been, and you find you do not much care.\n\nThere was more in the box. There is always more in the box; that is the whole trap of the work, the way it tells you to stay one more minute, take one more bundle, and one of those minutes is always the one that kills you. You did not take it. You took what you took and you got the both of you to the car, and the boxman is beside you, rattled and grey and grinning anyway, and the math of the night came out on the right side of the only line that finally matters, which is the one with the two of you alive on it.\n\nThe grey comes up over the city and you drive into it, lighter than you wanted and out, and out is the word you keep coming back to. Out. Together. The rest is just money."
+      },
+      {
+        id: "end_not_whole",
+        name: "Out, Not Whole",
+        summary: "You made the car. The boxman did not.",
+        priority: 0,
+        conditions: [{ field: "got_clear", op: "is_true" }, { field: "partner_status", op: "equals", value: "gone" }],
+        body: "You drive, and the seat beside you is empty, and it stays empty all the long grey way out of the city, and you keep not looking at it the way you kept not looking back at the dock.\n\nYou made it. That is the fact, and it is a real one, and you hold onto it because some of the other facts of the night are heavier and you are too far from anywhere safe to put them down yet. The take is on the back seat. You got out clean, by the only measure the outfit keeps. By the other measure \u2014 the fifteen-year one, the one that says you do not leave each other in the building \u2014 you did not get out at all, and you will be a long time understanding which measure you are going to have to live by now.\n\nThere will be a reckoning, later, of what happened on the dock, and who could have moved faster, and whether the half-second was real. Not tonight. Tonight there is only the grey road and the empty seat and the particular arithmetic of a man who came out alone, carrying everything, and the one thing he wanted to keep."
+      },
+      {
+        // Out-of-time: distinct from the structural default. Empty conditions (fires via the deadline path only).
+        id: "end_dawn",
+        name: "Dawn",
+        summary: "The night ran out before you cleared. The grey comes up and the city wakes around you.",
+        conditions: [],
+        body: "The grey wins. It does not come for you the way the outfit would, or the cops; it just comes, the way morning always comes, indifferent and on time, the thin light filling in the alley and the dock and the street until there is nowhere left that the dark was hiding you.\n\nYou spent the night, every minute of it, and the night is spent, and you are still here \u2014 short of the car, or sitting in it not yet moving, or somewhere in the body of the building still doing the careful prudent thing \u2014 when the city opens its eyes. A delivery truck. A man with keys. A black-and-white on its slow morning loop, and a cop in it who looks twice at a parked car with two men low in the seats and a great many bags on the back.\n\nIt was never the outfit you most had to beat. It was the clock, the plain turning of the night toward day, and the clock does not chase and does not hurry and does not miss. The clock just runs out. Yours has."
+      },
+      {
+        // Structural catch-all (the mandatory isDefault). Unreachable in the slice; kept deliberately NEUTRAL
+        // so it never advertises an outcome the player cannot reach (a live "cornered inside" branch is deferred).
+        id: "end_still_inside",
+        name: "Still Inside",
+        summary: "The night closed and you never made the getaway.",
+        isDefault: true,
+        conditions: [],
+        body: "However it came to this \u2014 wherever the night caught you, still inside the thing you came to rob \u2014 you did not make the getaway. The building kept you. The rest is for other people to piece together later, from what they find, and to tell however they tell it."
+      }
+    ]
+  };
+
+  // src/experiments/countinghouse/content/countinghouse.ts
+  var countinghouse = {
+    id: "countinghouse",
+    title: "The Countinghouse",
+    startChapterId: "ch1_wayin",
+    carry: { vars: "all", resources: ["lead"], clues: true, inventory: true },
+    gameDeadlineMinutes: 240,
+    domains: { partner_status: ["steady", "frayed", "hurt", "gone"] },
+    mutexLatches: [["alarm_tripped", "made_clean"]],
+    chapters: [
+      {
+        id: "ch1_wayin",
+        title: "The Way In",
+        story: ch1WayIn,
+        transitions: [{ when: {}, goTo: "ch2_wayout" }]
+      },
+      {
+        id: "ch2_wayout",
+        title: "The Way Out",
+        story: ch2WayOut,
+        gameEnding: true,
+        transitions: [],
+        carriedRequired: ["loot", "partner_status"]
+      }
+    ]
+  };
+
+  // src/experiments/countinghouse/play/main.ts
+  function substituteTime(text, timeLabel) {
+    return text.replace(/\{\{time\}\}/g, timeLabel);
+  }
+  function paragraphs(body, timeLabel) {
+    return substituteTime(body, timeLabel).split("\n\n").map((p) => `<p>${escapeHtml(p)}</p>`).join("");
+  }
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function meter(label, value, max) {
+    const v = Math.max(0, Math.min(max, Number(value)));
+    const pct = Math.round(v / max * 100);
+    const low = pct <= 25 ? " low" : "";
+    return `<div class="meter${low}"><span class="meter-label">${label}</span><span class="meter-track"><span class="meter-fill" style="width:${pct}%"></span></span></div>`;
+  }
+  function renderView(view) {
+    var _a;
+    if (view.gameOver && view.endingReached) {
+      const e = view.endingReached;
+      return `
+      <div class="ending">
+        <div class="ending-kicker">\u2014 an ending \u2014</div>
+        <h1 class="ending-name">${escapeHtml(e.name)}</h1>
+        <div class="prose">${paragraphs((_a = e.body) != null ? _a : e.summary, view.timeLabel)}</div>
+        <button class="restart" data-restart="1">Case it again</button>
+      </div>`;
+    }
+    const lead = view.state.vars.lead;
+    const loot = view.state.vars.loot;
+    const choices = view.choices.filter((c) => c.available).map((c) => `<button class="choice" data-choice="${c.id}">${escapeHtml(c.label)}</button>`).join("");
+    return `
+    <div class="status">
+      <span class="chapter">${escapeHtml(view.chapterTitle)}</span>
+      <span class="clock">${escapeHtml(view.timeLabel)}</span>
+    </div>
+    <div class="meters">${meter("Lead", lead, 60)}${meter("The Take", loot, 4)}</div>
+    <div class="scene">
+      <h2 class="node-title">${escapeHtml(view.node.title)}</h2>
+      <div class="prose">${paragraphs(view.node.body, view.timeLabel)}</div>
+    </div>
+    <div class="choices">${choices}</div>`;
+  }
+  function mount(root) {
+    let runner = new GameRunner(countinghouse);
+    const draw = () => {
+      root.innerHTML = renderView(runner.view());
+      root.querySelectorAll("[data-choice]").forEach(
+        (b) => b.addEventListener("click", () => {
+          runner.choose(b.dataset.choice);
+          draw();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        })
+      );
+      const restart = root.querySelector("[data-restart]");
+      if (restart) restart.addEventListener("click", () => {
+        runner = new GameRunner(countinghouse);
+        draw();
+      });
+    };
+    draw();
+  }
+  if (typeof document !== "undefined") {
+    const el = document.getElementById("app");
+    if (el) mount(el);
+  }
+})();
+</script>
+</body>
+</html>

@@ -9,6 +9,29 @@ taken before the first deliberate un-freeze.
 > Note: `package.json` `version` (`0.1.0`) is the npm package version and is intentionally *separate* from
 > the engine version line below.
 
+## [Unreleased] — The Countinghouse heist slice (branch `feature/countinghouse-slice`)
+
+The first **game** authored on the post-v1.4 engine + counted inventory — a two-chapter vertical slice
+("The Way In" → "The Way Out") that is the first content to exercise the four new capabilities. **Zero engine
+change**; content only, under `src/experiments/countinghouse/`. Built TDD after a three-lens team gut-check of
+the plan (verdict CHANGE — four real bugs caught before any code: a `got_clear` honesty leak, a self-loop
+clock-calibration trap, a standalone softlock, two tautological tests; all fixed in the plan).
+
+- **ch1 "The Way In"** — counted inventory (`charges` via `has_item`/`decrement`; the counted take `loot` via
+  the distinct-node grab chain) + **The Lead** (`adjust_resource`: casing / cutting the relay buy margin; a
+  loud entry costs it). Non-game-ending; one neutral default the container transitions to ch2.
+- **ch2 "The Way Out"** — node-named `endsWith` finales (Clean Away / Away Lighter / Out Not Whole, branched by
+  the gated drive choices), the `outOfTimeEndingId` ending (**Dawn**), and the atZero death (**The Outfit's
+  Math**, priority 2). `got_clear` is set on the drive-away (not the car hub) so a pre-drive deadline-cross
+  honestly falls through to Dawn.
+- **The Game** — `countinghouse` wires the two chapters with the carry contract (Lead + loot/partner/latches),
+  machine-checked by the A1 v1.1 contract linter (domains / mutex / carriedRequired). Container imported by
+  submodule, not the barrel.
+- **Hardening** — a 600-run coherence fuzz sweep proves every random run ends honestly (no fake getaways; Dawn
+  never claims the drive; The Outfit always means the Lead is blown). Findings + the container-promotion
+  next-step in `src/experiments/countinghouse/FINDINGS.md`. A self-contained playable HTML harness ships too.
+- **289 → 300+ tests green**, typecheck clean, nothing pushed.
+
 ## [Unreleased] — engine v1.4 (in progress, branch `feature/engine-v1.4`)
 
 The first deliberate un-freeze of `src/engine/` since v1.3. Wrapping up the remaining v1.4 hardening punch

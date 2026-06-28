@@ -9,6 +9,28 @@
 > (the team + fuzzer pass) and [`ENGINE-ASSESSMENT.md`](src/experiments/sump-line/ENGINE-ASSESSMENT.md)
 > (the F1–F9 log). The authoring method is in [`docs/authoring-method.md`](docs/authoring-method.md).
 
+## Status — 2026-06-27 (The Countinghouse heist slice) — resume anchor
+
+Engine v1.4 is **merged** (`master`, tag `engine-v1.4`) and **counted inventory** shipped (`58526b6`). The
+post-v1.4 capabilities brainstorm chose the next game = a **mob/heist thriller**; counted inventory was
+capability #1. Now built: **"The Countinghouse"** — a two-chapter vertical slice on branch
+**`feature/countinghouse-slice`** (the first game to exercise all four new capabilities). Spec + plan in
+`docs/superpowers/{specs,plans}/2026-06-27-*`; the plan was team-gut-checked (verdict CHANGE → fixed) before any
+code.
+
+- ✅ **ch1 "The Way In"** (`5478d89`) — counted inventory + The Lead (`adjust_resource`).
+- ✅ **ch2 "The Way Out"** (`27ac26d`) — `endsWith` finales + Dawn (`outOfTimeEndingId`) + The Outfit (atZero).
+- ✅ **The Game + contracts** (`0ea06ff`) — `countinghouse` wired; `lintGame` clean; carry verified; end-to-end.
+- ⏳ **Hardening + docs + playable harness** (Task 4–5 in progress) — 600-run coherence fuzz green; FINDINGS.md
+  written; this update; then the self-contained playable `countinghouse.html`.
+- **Zero engine change throughout. Nothing pushed.**
+
+**NEXT (Matthew's call):** finish the slice (the playable build), then one of —
+(a) **promote the container** to a shared `src/container/` (two consumers now; see `countinghouse/FINDINGS.md` —
+the recommended immediate refactor); (b) **expand the heist** (the loud route, then the remaining two chapters);
+(c) the **next capability** (characters-as-assets / timed challenges / clock-phase profile); (d) the **WS-G
+front-end**. Deferred P2 engine lints (F8/F9/F10) remain clean on shipped content.
+
 ## Status — 2026-06-26 (engine v1.4 wrap-up IN PROGRESS) — resume anchor
 
 Working on branch **`feature/engine-v1.4`** (tag **`engine-v1.3`** = frozen revert anchor: `git checkout

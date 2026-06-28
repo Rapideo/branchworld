@@ -52,11 +52,10 @@ export function seedChapterStory(
     start.entryEffects = [...seedEffects, ...(start.entryEffects ?? [])];
   }
 
-  if (gameDeadlineMinutes !== undefined) {
+  if (gameDeadlineMinutes !== undefined && s.deadline !== undefined) {
     const chapterStart = parseTime(s.startTime);
     const projected = chapterStart + Math.max(0, gameDeadlineMinutes - gameElapsedMinutes);
-    const chapterDeadlineMin = s.deadline !== undefined ? parseTime(s.deadline) : Infinity;
-    const eff = Math.max(chapterStart, Math.min(chapterDeadlineMin, projected));
+    const eff = Math.max(chapterStart, Math.min(parseTime(s.deadline), projected));
     s.deadline = minutesToClock(eff);
   }
 

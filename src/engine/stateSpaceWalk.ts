@@ -31,8 +31,10 @@ function keyOf(n: WNode, timeBucket?: number): string {
   return JSON.stringify({
     id: n.snap.currentId,
     ending: n.snap.endingId ?? null,
-    // H10: distinct accumulated time at reconverging hubs is the real cap driver. The optional timeBucket
-    // mode quantizes time so same-bucket arrivals collapse (lossless when detour costs are bucket multiples).
+    // H10: distinct accumulated time at reconverging hubs is the real cap driver. The optional timeBucket mode
+    // quantizes time so same-bucket arrivals collapse — but it is APPROXIMATE: it skips states, so it can hide a
+    // softlock / orphan ending. Lossless only when EVERY time threshold (time_* gates, event triggers, the
+    // deadline, depletion step boundaries) is bucket-aligned. Use it for scale triage, never as a pass/fail gate.
     time: timeBucket ? Math.floor(s.time / timeBucket) : s.time,
     location: s.location,
     clues: sortArr(s.clues),
@@ -169,6 +171,18 @@ function checkEventRecovery(w: WalkResult) {
   return w.story.events.map((ev) => ({ eventId: ev.id, ok: w.reachedNodes.has(ev.recoveryNodeId) }));
 }
 
+// H8: an event is present-reachable only if it actually FIRED present on some reachable path — NOT merely if
+// its ifPresentNode was reached (that node can be choice-reachable). The engine logs each present firing.
+function computeEventPresent(w: WalkResult) {
+  const fired = new Set<string>();
+  for (const wn of w.visited.values())
+    for (const line of wn.view.log) {
+      const m = /^Event (.+?) fired \(present\)/.exec(line);
+      if (m) fired.add(m[1]);
+    }
+  return w.story.events.map((ev) => ({ eventId: ev.id, ok: fired.has(ev.id) }));
+}
+
 export function walkStateSpace(story: Story, opts?: { cap?: number; timeBucket?: number }): WalkReport {
   const cap = opts?.cap ?? DEFAULT_CAP;
   const w = walk(story, cap, opts?.timeBucket);
@@ -181,7 +195,7 @@ export function walkStateSpace(story: Story, opts?: { cap?: number; timeBucket?:
     orphanEndings: findOrphanEndings(w),
     deadChoices: findDeadChoices(w),
     eventRecovery: checkEventRecovery(w),
-    eventPresent: w.story.events.map((ev) => ({ eventId: ev.id, ok: w.reachedNodes.has(ev.ifPresentNode) })),
+    eventPresent: computeEventPresent(w),
     conditionalChoices: [...w.choiceAvail.entries()]
       .filter(([, v]) => v.available > 0 && v.locked > 0)
       .map(([k]) => k)

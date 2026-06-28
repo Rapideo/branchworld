@@ -70,6 +70,29 @@ describe('walkStateSpace — present-reachability (H8) + per-branch reachability
     expect(walkStateSpace(presentStory(true)).eventPresent.find((e) => e.eventId === 'E')!.ok).toBe(true);
   });
 
+  it('H8: a present node reached only by a CHOICE (event never fires present) reports ok=false', () => {
+    const story = {
+      id: 'ev2', title: 'ev2', startNodeId: 'a', startTime: '15:00', deadline: '17:00', startLocation: 'L1',
+      variables: [{ name: 'seen', type: 'boolean', default: false, purpose: 's' }],
+      locations: [{ id: 'L1', name: 'L1' }, { id: 'L2', name: 'L2' }],
+      events: [{
+        id: 'E', title: 'E', trigger: [{ field: 'time', op: 'time_after', value: '15:30' }],
+        eventLocation: 'L2', ifPresentNode: 'n_present', // present judged only at L2; the player never goes there
+        ifAbsentEffects: [{ field: 'seen', op: 'set', value: 'true' }], recoveryNodeId: 'n_rec',
+      }],
+      nodes: [
+        { id: 'a', title: 'A', body: '', choices: [
+          { id: 'peek', label: 'peek', destination: 'n_present', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] }, // a CHOICE into the present node
+          { id: 'wait', label: 'wait', destination: 'n_rec', effects: [{ field: 'time', op: 'add_minutes', value: '60' }] },
+        ] },
+        { id: 'n_present', title: 'P', body: '', choices: [], resolvesEnding: true },
+        { id: 'n_rec', title: 'R', body: '', choices: [], resolvesEnding: true },
+      ],
+      endings: [{ id: 'd', name: 'D', summary: '', conditions: [], isDefault: true }],
+    } as unknown as Story;
+    expect(walkStateSpace(story).eventPresent.find((e) => e.eventId === 'E')!.ok).toBe(false);
+  });
+
   it('H12: surfaces a choice available on one branch and locked on another (conditionalChoices)', () => {
     const story = {
       id: 'br', title: 'br', startNodeId: 'a', startTime: '15:00', deadline: '17:00', startLocation: 'L',

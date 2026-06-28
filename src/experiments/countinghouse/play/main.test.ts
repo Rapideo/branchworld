@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { substituteTime, renderView } from './main';
-import { GameRunner } from '../../sump-line/GameRunner';
+import { GameRunner } from '../../../container';
 import { countinghouse } from '../content/countinghouse';
 
 describe('play harness (pure render helpers over the real GameRunner)', () => {

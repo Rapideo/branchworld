@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { pickNextChapter } from './transitions';
 import type { Chapter } from './types';
-import type { WorldState } from '../../engine';
+import type { WorldState } from '../engine';
 
 const ch: Chapter = {
   id: 'a', title: 'A', story: {} as never, transitions: [

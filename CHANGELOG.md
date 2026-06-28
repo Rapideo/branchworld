@@ -9,6 +9,16 @@ taken before the first deliberate un-freeze.
 > Note: `package.json` `version` (`0.1.0`) is the npm package version and is intentionally *separate* from
 > the engine version line below.
 
+## [Unreleased] — Container promoted to `src/container/` (branch `refactor/promote-container`)
+
+The multi-chapter container is now a **shared, game-agnostic layer** at `src/container/` (was physically inside
+`src/experiments/sump-line/`). Moved with git history: `types` / `carry` / `transitions` / `GameRunner` /
+`lintGame` / `lintGameContracts` / `seededWalk` + the synthetic `exampleGame` fixture, plus a new
+`src/container/index.ts` barrel. The container depends only on `src/engine/` + its synthetic fixture; the two
+cave-specific integration tests stay with their fixtures in `sump-line/`. `sump-line/index.ts` re-exports the
+container (cave imports unchanged); the heist imports from `../../../container`. Zero behavior change; both
+playable builds re-bundle; 305 tests green.
+
 ## [Unreleased] — The Countinghouse heist slice (branch `feature/countinghouse-slice`)
 
 The first **game** authored on the post-v1.4 engine + counted inventory — a two-chapter vertical slice

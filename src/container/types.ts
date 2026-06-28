@@ -1,4 +1,4 @@
-import type { Story, Condition, Primitive, GameView, EngineSnapshot } from '../../engine';
+import type { Story, Condition, Primitive, GameView, EngineSnapshot } from '../engine';
 
 /** A rule evaluated when a chapter ends; first match wins. Empty `when` = catch-all. */
 export interface ChapterTransition {

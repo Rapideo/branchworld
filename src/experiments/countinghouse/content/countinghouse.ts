@@ -1,4 +1,4 @@
-import type { Game } from '../../sump-line/types';
+import type { Game } from '../../../container';
 import { ch1WayIn } from './ch1WayIn';
 import { ch2WayOut } from './ch2WayOut';
 

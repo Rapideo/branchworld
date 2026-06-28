@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { walkStateSpace } from '../../engine/stateSpaceWalk';
 import { ch2High } from './content/ch2High';
 import { ch2Sump } from './content/ch2Sump';
-import { seedStory, walkSeeded, valuesAtEndings } from './seededWalk';
+import { seedStory, walkSeeded, valuesAtEndings } from '../../container';
 
 describe('A4/E2 — seeded walker + value-at-endings report', () => {
   it('seedStory rewrites variable defaults and resource starts (non-destructively)', () => {

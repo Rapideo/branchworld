@@ -1,5 +1,5 @@
-import { parseTime } from '../../engine';
-import type { Story, Effect, WorldState, Primitive } from '../../engine';
+import { parseTime } from '../engine';
+import type { Story, Effect, WorldState, Primitive } from '../engine';
 import type { CarryContract, CarriedState } from './types';
 
 export function minutesToClock(min: number): string {

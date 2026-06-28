@@ -1,5 +1,5 @@
-import { lintStory } from '../../engine';
-import type { LintIssue } from '../../engine';
+import { lintStory } from '../engine';
+import type { LintIssue } from '../engine';
 import type { Game } from './types';
 import { lintGameContracts } from './lintGameContracts';
 

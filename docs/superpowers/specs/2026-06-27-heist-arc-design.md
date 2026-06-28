@@ -69,7 +69,10 @@ ch1 → one Floor route → the Box → one Way-Out route.
   count-crew). Carries across chapters (rebased).
 - **The partner** — a carried latch `partner_status` ∈ {`steady`, `frayed`, `hurt`, `gone`}, the cave's
   `companion_status` analog. Beats across the night test their nerve; it gates content and decides which ending is
-  honest.
+  honest. **Slice scope:** the gone-sideways turn always *frays* the boxman, so at the finale he is `frayed` (or
+  `gone` if abandoned); `steady`/`hurt` are forward-declared for later chapters. A present-but-frayed partner
+  **counts as a clean getaway** — the getaway prose is written to a rattled man, not a serene one. When the arc
+  adds a `hurt` state, the clean gate tightens to exclude it (a wounded boxman in the back seat is never "clean").
 
 ### The carried-output contract (machine-checked by the A1 v1.1 linter)
 
@@ -121,6 +124,40 @@ Author **one full path** end-to-end before fanning out (the cave-slice disciplin
 
 The remaining Floor/Way-Out routes and the other two full chapters follow once the slice is proven and reviewed
 (replay-route expansion, exactly as the cave did evenings/routes).
+
+## Keystone prose (voice calibration)
+
+Three anchors that fix the voice — 1970s, cold, literary, procedural, restrained; the mob is *procedure, not
+menace*; sparse dialogue. The rest of the slice is authored to match these.
+
+**`n_street` — the open (casing the countinghouse):**
+> The countinghouse keeps bankers' hours in a building that doesn't. From across the street it is a laundry with
+> the lights off and a second floor that never quite goes dark — a slot of yellow at the edge of a drawn blind,
+> and behind the blind the outfit's money getting counted into the small hours by men who are good with numbers
+> and nothing else. {{time}}. The boxman is in the car beside you with his hands in his lap, not smoking, because
+> he gave it up the way he gives everything up: all at once and for good. "Two ways in," he says, not a question.
+> You have looked at both for a month. The quiet way is the service door and a long patient hour of nobody
+> noticing. The loud way is faster, and fast does not forgive. You watch the slot of yellow light and you do the
+> arithmetic one more time, the way you always do, because the arithmetic is the job and the rest is just nerve.
+
+**`n_turn` — the gone-sideways turn (the count-crew comes back early):**
+> You hear the street door before you understand it — the particular complaint of a hinge you cased for a month
+> and know the voice of — and then the stairs, more than one man, unhurried, the sound of people who belong here
+> coming back to a place that is theirs. The count-crew. Early. Nobody is early in this business; early is a thing
+> that happens to other people, and now it is happening to you, with the box open and the take in your hands and
+> the only door the one the footsteps are climbing toward. The boxman has gone the grey of old putty. "They don't
+> come back till four," he says — to you, to the room, to the arithmetic that just stopped being true. It does not
+> matter now what was supposed to happen. What matters is the stairs, and the count of them, and how few are left.
+
+**`end_outfit` — The Outfit's Math (the atZero death):**
+> It is not personal, and that is the worst of it. The outfit does the sum the way it does every sum — what was
+> taken, what it costs to take it back, what the difference buys in the way of a message — and you are a line in
+> the ledger now, a number carried from one column to another in a room that smells of cold coffee and other
+> people's money. There is no speech. Men who are good with numbers do not make speeches. Somewhere out in the
+> night the boxman is running, or is not; the building has stopped being your problem and become arithmetic, and
+> arithmetic does not hurry and does not miss. The margin you spent the whole night buying back, minute by minute,
+> is spent. The lead is gone. They have you, and they have all the time the books allow — which is exactly as much
+> as they need, and not one minute more.
 
 ## Out of scope (deferred / parked)
 

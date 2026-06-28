@@ -23,7 +23,8 @@ export function applyResourceStep(s: WorldState, story: Story, startTime: number
     let value: number;
     if (r.depletion) {
       const steps = Math.floor((s.time - startTime) / r.depletion.everyMinutes);
-      value = clampValue(r.start - r.depletion.amount * steps, bound);
+      const offset = Number(vars[`__roff_${r.id}`] ?? 0); // F6: choice-driven additive offset
+      value = clampValue(r.start - r.depletion.amount * steps + offset, bound);
     } else {
       value = clampValue(Number(vars[r.id] ?? r.start), bound);
     }

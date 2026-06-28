@@ -9,7 +9,43 @@
 > (the team + fuzzer pass) and [`ENGINE-ASSESSMENT.md`](src/experiments/sump-line/ENGINE-ASSESSMENT.md)
 > (the F1–F9 log). The authoring method is in [`docs/authoring-method.md`](docs/authoring-method.md).
 
-## Status — end of 2026-06-24 session (resume anchor)
+## Status — 2026-06-26 (engine v1.4 wrap-up IN PROGRESS) — resume anchor
+
+Working on branch **`feature/engine-v1.4`** (tag **`engine-v1.3`** = frozen revert anchor: `git checkout
+engine-v1.3` to bail). The first **deliberate v1.4 un-freeze**. Sequence agreed 2026-06-26:
+**A2 → A1 v1.1 → A3 → A5 → A4 (H8/H12) → [clock decision] → A6 → A7.** Clock-model fork = **(b) deferred** —
+A6 is built clock-agnostic; the full clock model goes to the post-engine capabilities brainstorm (with
+"Settings & Preferences"). Each item committed atomically on the branch; **nothing pushed**.
+
+- ✅ **Versioning** — `engine-v1.3` tag + `CHANGELOG.md` (`2e27ed6`).
+- ✅ **A2** — `NEGATIVE_TIME_DELTA` lint + monotonic-time invariant; **H2 closed**; PROBE-B flipped (`1f4ed08`).
+- ✅ **A1 v1.1** — ancestor-aware + annotated contract checks (`Chapter.carriedRequired` / `Game.domains` /
+  `Game.mutexLatches`), cave contract populated, zero-FP (`c96529e`).
+- ✅ **A3** — node-named endings (`endsWith`) + atZero-by-priority (H3) + `outOfTimeEndingId` (H4), unified in
+  `resolveEndingAt` (`2cac20e`); PROBE-C flipped.
+- ✅ **Team adversarial pass + ALL P0/P1 follow-ups (F1–F6)** — found one CONFIRMED live cave bug + seam gaps;
+  fixed: **F1** ch2_high honesty (the live bug), **F2** `ATZERO_PRIORITY_DOMINANCE`, **F3** endsWith-trigger +
+  death-beats-pin, **F4/F5/F6** coherence lints (`bf2bbc7`/`ce21b75`/`62fedbe`/`98a8b87`).
+- ✅ **A5** — `EVENT_PRESENT_NODE_ON_DEMAND` lint (H6 regression guard) + a conditional-trigger regression lock
+  (H7 — conditional triggers are already engine-supported; B1 used them).
+- ✅ **A4 (H8/H12)** — present-reachability (`eventPresent`) + per-branch reachability (`conditionalChoices`) in
+  the walker; cave's seal-event present node verified reachable.
+- ✅ **A6** — clock-agnostic resource offset (`adjust_resource` op + hidden offset var, F6); PROBE-G proves a
+  battery-swap raises the lamp. Lint `ADJUST_RESOURCE_NOT_TIME_DRIVEN`.
+- ✅ **A7** — `walkStateSpace({ timeBucket: N })` mode (H10) + method-doc correction (quantize detour times).
+- **276 tests green; typecheck clean. ▶▶ v1.4 COMPLETE** (A2..A7 + team-pass F1–F6 + the pre-merge fixes).
+
+**NEXT = merge `feature/engine-v1.4` → `main`** (pre-merge Team check done = OK-WITH-FIXES, all fixed; F11
+precedence docs done). Remaining team-pass **P2** (all clean on the shipped content, deferred): F8
+(`hasProducerFreePath` ignores transition conditions), F9 (`CONTRACT_DOMAIN_VIOLATION` counts defaults /
+`not_equals`), F10 (chapter-deadline-OOT lint). THEN the deferred **capabilities brainstorm** (task #9): six
+parked ideas —
+inventory, clue-finding/scene-exploration, free travel between locations, characters+locations as rich
+assets, an engine "Settings & Preferences" profile (chapter-vs-no-chapter, carry rules, **clock model**),
+and **As Dusk Falls-style** timed/skill challenges (narrative-native QTEs; mostly front-end). Each gets its
+own design pass AFTER the engine wrap-up.
+
+## Status — end of 2026-06-24 session (prior anchor)
 
 **DONE this session** (all container-side / content; engine FROZEN throughout; **232 tests green**):
 - ✅ **Hardening pass** — fuzzer + 4 team lenses → `HARDENING-FINDINGS.md` (H1–H16) + `harden/fuzz.test.ts`.

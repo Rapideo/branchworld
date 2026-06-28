@@ -19,6 +19,9 @@ export const sumpLine: Game = {
   startChapterId: 'ch1_descent',
   carry: { vars: 'all', resources: ['lamp_charge', 'body_heat'], clues: true, inventory: true },
   gameDeadlineMinutes: 360,
+  // A1 v1.1 — the cross-chapter contract, machine-checked:
+  domains: { companion_status: ['with_you', 'hurt', 'lost'] },
+  mutexLatches: [['cave_all_together', 'cave_someone_lost']],
   chapters: [
     {
       id: 'ch1_descent',
@@ -29,7 +32,9 @@ export const sumpLine: Game = {
         { when: {}, goTo: 'ch2_sump' },
       ],
     },
-    { id: 'ch2_high', title: 'The Dry High Traverse', story: ch2High, gameEnding: true, transitions: [] },
-    { id: 'ch2_sump', title: 'The Flooded Sump Crawl', story: ch2Sump, gameEnding: true, transitions: [] },
+    { id: 'ch2_high', title: 'The Dry High Traverse', story: ch2High, gameEnding: true, transitions: [],
+      carriedRequired: ['companion_status', 'cave_someone_lost', 'cave_all_together'] },
+    { id: 'ch2_sump', title: 'The Flooded Sump Crawl', story: ch2Sump, gameEnding: true, transitions: [],
+      carriedRequired: ['companion_status'] },
   ],
 };

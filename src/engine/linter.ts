@@ -105,6 +105,11 @@ export function lintStory(story: Story): LintResult {
   for (const r of story.resources ?? []) varNames.add(r.id);
   const sym = collectSymbols(story);
 
+  // reserved namespace: the '__' prefix is engine-internal (e.g. resource offsets stored as `__roff_<id>`)
+  for (const v of story.variables) {
+    if (v.name.startsWith('__')) err('RESERVED_VAR_PREFIX', `Variable '${v.name}' uses the reserved '__' prefix (engine-internal, e.g. resource offsets)`, v.name);
+  }
+
   // duplicate node ids
   const seen = new Set<string>();
   for (const n of story.nodes) {
@@ -125,7 +130,7 @@ export function lintStory(story: Story): LintResult {
 
   // no-exit nodes + soft-lock detection
   for (const n of story.nodes) {
-    if (n.resolvesEnding) continue;
+    if (n.resolvesEnding || n.endsWith) continue; // an endsWith node resolves (F3), so it needs no choices
     const choices = n.choices ?? [];
     if (choices.length === 0) {
       err('NO_EXIT', `Node ${n.id} has no choices and does not resolve an ending`, n.id);
@@ -212,6 +217,23 @@ export function lintStory(story: Story): LintResult {
     err('UNDEFINED_LOCATION', `startLocation ${story.startLocation} is not a defined location`);
   }
 
+  // NEGATIVE_TIME_DELTA — time is monotonic; add_minutes may never rewind the clock (H2)
+  const checkTimeDeltas = (es: Effect[] | undefined, where: string) => {
+    for (const e of es || []) {
+      if (e.op !== 'add_minutes') continue;
+      const n = Number(e.value);
+      if (Number.isFinite(n) && n < 0) {
+        err('NEGATIVE_TIME_DELTA',
+          `add_minutes delta '${e.value}' is negative; time is monotonic and may not rewind`, where);
+      }
+    }
+  };
+  for (const n of story.nodes) {
+    checkTimeDeltas(n.entryEffects, n.id);
+    for (const c of n.choices || []) checkTimeDeltas(c.effects, `${n.id}:${c.id}`);
+  }
+  for (const ev of story.events) checkTimeDeltas(ev.ifAbsentEffects, ev.id);
+
   // reachability
   const reachable = computeReachable(story);
   const presentNodes = new Set(story.events.map((e) => e.ifPresentNode));
@@ -227,6 +249,28 @@ export function lintStory(story: Story): LintResult {
   if (defaults.length > 1) err('MULTIPLE_DEFAULT_ENDINGS', 'More than one default ending');
   if (defaults.length === 1 && (defaults[0].conditions?.length ?? 0) > 0) {
     err('DEFAULT_HAS_CONDITIONS', 'Default ending must have no conditions');
+  }
+
+  // A3 — node-named endings (F8) + the out-of-time ending (H4) must reference real endings.
+  for (const n of story.nodes) {
+    if (n.endsWith && !endingIds.has(n.endsWith)) {
+      err('NODE_ENDING_MISSING', `Node ${n.id} endsWith '${n.endsWith}' which is not a defined ending`, n.id);
+    }
+    // F6 — a node that pins an ending must not also carry live choices (they are unreachable).
+    if (n.endsWith && (n.choices?.length ?? 0) > 0) {
+      warn('ENDSWITH_WITH_LIVE_CHOICES', `Node ${n.id} pins an ending via endsWith but also has choices — they are unreachable (the ending resolves on entry)`, n.id);
+    }
+  }
+  if (story.outOfTimeEndingId) {
+    if (!endingIds.has(story.outOfTimeEndingId)) {
+      err('OUT_OF_TIME_ENDING_MISSING', `outOfTimeEndingId '${story.outOfTimeEndingId}' is not a defined ending`);
+    } else {
+      // F5 — the out-of-time ending fires regardless of its own conditions (deadline path), so it must be condition-free.
+      const oot = story.endings.find((e) => e.id === story.outOfTimeEndingId);
+      if (oot && (oot.conditions?.length ?? 0) > 0) {
+        err('OUT_OF_TIME_HAS_CONDITIONS', `Out-of-time ending '${oot.id}' must have no conditions (it fires regardless of them via the deadline path)`, oot.id);
+      }
+    }
   }
 
   // overlap/shadow warnings — warn when we cannot prove two non-default endings are mutually exclusive
@@ -252,6 +296,25 @@ export function lintStory(story: Story): LintResult {
     else if (!reachable.has(ev.recoveryNodeId)) err('EVENT_RECOVERY_UNREACHABLE', `Event ${ev.id} recovery node ${ev.recoveryNodeId} is unreachable by navigation`, ev.id);
     if ((ev.ifAbsentEffects?.length ?? 0) === 0) err('EVENT_NO_ABSENT', `Event ${ev.id} has no if-absent effects`, ev.id);
     if ((ev.trigger?.length ?? 0) === 0) err('EVENT_NO_TRIGGER', `Event ${ev.id} has no trigger`, ev.id);
+  }
+
+  // EVENT_PRESENT_NODE_ON_DEMAND (H6) — a non-event choice routing into an event's ifPresentNode that carries
+  // entry effects (a consequence) lets the player trigger that consequence on demand, bypassing the event's
+  // timing (the "looking seals the cave early" bug). A present-consequence node must be reached ONLY by the event.
+  const nodeById = new Map(story.nodes.map((n) => [n.id, n]));
+  const presentConsequence = new Map<string, string>(); // present-node id -> event id
+  for (const ev of story.events) {
+    const pn = nodeById.get(ev.ifPresentNode);
+    if (pn && (pn.entryEffects?.length ?? 0) > 0) presentConsequence.set(ev.ifPresentNode, ev.id);
+  }
+  for (const n of story.nodes) {
+    for (const c of n.choices ?? []) {
+      const evId = presentConsequence.get(c.destination);
+      if (evId) {
+        err('EVENT_PRESENT_NODE_ON_DEMAND',
+          `Choice ${c.id} (node ${n.id}) routes into event ${evId}'s present node '${c.destination}', which has entry effects — its consequence fires on demand, bypassing the event timing`, n.id);
+      }
+    }
   }
 
   // time-literal range: every time_* condition/trigger value must sit in [startTime, deadline]
@@ -332,7 +395,10 @@ export function lintResources(story: Story): LintIssue[] {
   const scanEffects = (effects: { field: string; op: string; value?: string }[] | undefined, where: string) => {
     for (const e of effects ?? []) {
       if (timeDriven.has(e.field) && (e.op === 'set' || e.op === 'increment' || e.op === 'decrement')) {
-        issues.push({ level: 'error', code: 'RESOURCE_TIME_DRIVEN_WRITTEN', message: `Effect writes time-driven resource ${e.field} (it is recomputed from the clock)`, where });
+        issues.push({ level: 'error', code: 'RESOURCE_TIME_DRIVEN_WRITTEN', message: `Effect writes time-driven resource ${e.field} (it is recomputed from the clock; use adjust_resource for an offset)`, where });
+      }
+      if (e.op === 'adjust_resource' && !timeDriven.has(e.field)) {
+        issues.push({ level: 'error', code: 'ADJUST_RESOURCE_NOT_TIME_DRIVEN', message: `adjust_resource targets '${e.field}', which is not a time-driven resource (only time-driven resources have an offset)`, where });
       }
       if (e.op === 'set' && boundOf[e.field] && e.value !== undefined && /^-?\d+(\.\d+)?$/.test(e.value)) {
         const n = Number(e.value);
@@ -348,6 +414,32 @@ export function lintResources(story: Story): LintIssue[] {
     for (const c of n.choices ?? []) scanEffects(c.effects, `${n.id}:${c.id}`);
   }
   for (const ev of story.events) scanEffects(ev.ifAbsentEffects, ev.id);
+
+  // ATZERO_PRIORITY_DOMINANCE (F2) — post-A3 the atZero ending competes by priority instead of
+  // short-circuiting, so a resource death is honest only if it strictly out-ranks every non-default ending it
+  // can co-occur with. Enforce that here (the firing state includes the atZero setFlag, so a death-guarded
+  // ending is provably exclusive). Zero-FP *modulo `contradicts()` completeness*: only fires when co-occurrence
+  // is not provably contradictory (a genuinely-exclusive pair on unrelated vars that `contradicts` can't prove
+  // could in principle FP; the escape hatch is to make the exclusion explicit).
+  const endingsById = new Map(story.endings.map((e) => [e.id, e]));
+  const nonDefaultEndings = story.endings.filter((e) => !e.isDefault);
+  for (const r of resources) {
+    const death = r.atZero?.ending ? endingsById.get(r.atZero.ending) : undefined;
+    if (!death || death.isDefault) continue;
+    // NOT death.conditions: at runtime the atZero death fires by id, ignoring its own conditions, so using
+    // them here would let a death with contradictory conditions look "exclusive" and slip the guard (FN).
+    const deathConds: Condition[] = [];
+    if (r.atZero?.setFlag) deathConds.push({ field: r.atZero.setFlag, op: 'is_true' });
+    for (const o of nonDefaultEndings) {
+      if (o.id === death.id) continue;
+      if (contradicts([...deathConds, ...(o.conditions ?? [])])) continue; // provably cannot co-occur
+      if ((death.priority ?? 0) <= (o.priority ?? 0)) {
+        issues.push({ level: 'error', code: 'ATZERO_PRIORITY_DOMINANCE',
+          message: `Resource ${r.id} death ending '${death.id}' (priority ${death.priority ?? 0}) does not out-rank co-occurring ending '${o.id}' (priority ${o.priority ?? 0}); a resource death could be masked — raise '${death.id}' priority or make the two endings mutually exclusive`,
+          where: death.id });
+      }
+    }
+  }
 
   return issues;
 }

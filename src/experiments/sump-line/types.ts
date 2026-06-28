@@ -12,6 +12,7 @@ export interface Chapter {
   story: Story;           // a normal engine Story (own nodes, own clock, own endings)
   gameEnding?: boolean;   // if true, reaching an ending here ends the whole game
   transitions: ChapterTransition[]; // evaluated in order on chapter end
+  carriedRequired?: string[]; // A1 v1.1: vars this chapter requires an ANCESTOR chapter to produce (else its default silently carries)
 }
 
 export interface CarryContract {
@@ -28,6 +29,8 @@ export interface Game {
   chapters: Chapter[];
   carry: CarryContract;
   gameDeadlineMinutes?: number; // optional overall survival horizon (container-projected)
+  domains?: Record<string, string[]>;  // A1 v1.1: a var -> its legal value set (annotated, zero-FP DOMAIN check)
+  mutexLatches?: string[][];           // A1 v1.1: groups of mutually-exclusive latches (an ending asserting one must exclude its partners)
 }
 
 export interface CarriedState {

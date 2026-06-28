@@ -3,7 +3,7 @@ import { initState } from './state';
 import { evaluateConditions, explainFailing } from './conditions';
 import { applyEffects } from './effects';
 import { checkScheduledEvents } from './scheduledEvents';
-import { resolveEnding } from './endingResolver';
+import { resolveEndingAt } from './endingResolver';
 import { parseTime, formatTime } from './time';
 import { buildBounds, type BoundsMap } from './bounds';
 import { applyResourceStep } from './resources';
@@ -56,15 +56,11 @@ export class GameEngine {
     const rstep = applyResourceStep(this.state, this.story, this.startTime);
     this.state = rstep.state;
     if (rstep.log.length) this.log.push(...rstep.log);
-    if (!this.ending && rstep.atZeroEndingId) {
-      const e = this.story.endings.find((x) => x.id === rstep.atZeroEndingId);
-      if (e) {
-        this.ending = e;
-        this.log.push(`Ending: ${e.id}`);
-      }
-    }
-    if (!this.ending && (n.resolvesEnding || this.state.time >= this.deadline)) {
-      this.ending = resolveEnding(this.state, this.story);
+    // Unified ending resolution (A3): node-named (F8) > priority[state + atZero] (H3) > out-of-time (H4)
+    // > default. atZero no longer short-circuits — it competes by priority with state-matched endings.
+    const pastDeadline = this.state.time >= this.deadline;
+    if (!this.ending && (n.resolvesEnding || n.endsWith || rstep.atZeroEndingId || pastDeadline)) {
+      this.ending = resolveEndingAt(this.state, this.story, n, rstep.atZeroEndingId, pastDeadline);
       if (this.ending) this.log.push(`Ending: ${this.ending.id}`);
     }
   }

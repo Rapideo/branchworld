@@ -193,8 +193,90 @@ export function lintGameContracts(game: Game): ContractLintResult {
         e.writtenIn[0]);
     }
 
-    void carriedResources; // reserved for v1.1 ancestor-aware checks (carried resources are exempt there)
+  }
+
+  // ---- v1.1 — ancestor-aware + annotated checks (opt-in; zero-FP by author assertion) ----
+  const ledgerByName = new Map(ledger.map((e) => [e.name, e]));
+
+  // CONTRACT_UNKNOWN_ANNOTATION (F4) — an annotation names a field absent from the derived ledger (renamed or
+  // typo'd → it silently guards nothing). Covers domains keys, mutex group members, and carriedRequired entries.
+  const knownNames = new Set(ledger.map((e) => e.name));
+  const checkAnnotation = (name: string, kind: string, where: string) => {
+    if (!knownNames.has(name)) {
+      err('CONTRACT_UNKNOWN_ANNOTATION', `${kind} references '${name}', which no chapter declares/reads/writes — it guards nothing (renamed or typo'd)`, where);
+    }
+  };
+  for (const name of Object.keys(game.domains ?? {})) checkAnnotation(name, 'domains', name);
+  for (const group of game.mutexLatches ?? []) for (const m of group) checkAnnotation(m, 'mutexLatches', m);
+  for (const ch of game.chapters) for (const v of ch.carriedRequired ?? []) checkAnnotation(v, `carriedRequired (chapter ${ch.id})`, ch.id);
+
+  // CONTRACT_READ_NO_ANCESTOR_PRODUCER — a chapter's carriedRequired var has a path in with no upstream
+  // producer. Chapter-granular and conservative: a chapter that writes V on SOME path still counts as a
+  // producer (so the legitimate "the default IS the carried value on this path" case never false-positives);
+  // it fires only when NO ancestor writes V at all — the renamed/dropped-latch tail case v1 can't see.
+  for (const ch of game.chapters) {
+    for (const v of ch.carriedRequired ?? []) {
+      if (carriedResources.has(v)) continue; // carried resources are always produced by the resource system
+      const producers = new Set((ledgerByName.get(v)?.writtenIn ?? []).filter((id) => id !== ch.id));
+      if (hasProducerFreePath(game, ch.id, producers)) {
+        err('CONTRACT_READ_NO_ANCESTOR_PRODUCER',
+          `chapter '${ch.id}' requires '${v}' carried in, but a path from '${game.startChapterId}' reaches it with no upstream chapter writing '${v}' — on that path '${v}' is its default (silent carried-latch drift)`,
+          ch.id);
+      }
+    }
+  }
+
+  // CONTRACT_DOMAIN_VIOLATION — a value set/compared/defaulted outside an annotated domain.
+  for (const [name, domain] of Object.entries(game.domains ?? {})) {
+    const e = ledgerByName.get(name);
+    if (!e) continue;
+    const legal = new Set(domain);
+    for (const val of new Set([...e.writtenValues, ...e.comparedValues, ...e.defaults])) {
+      if (!legal.has(val)) {
+        err('CONTRACT_DOMAIN_VIOLATION',
+          `'${name}' uses value '${val}' outside its declared domain {${domain.join(', ')}}`, name);
+      }
+    }
+  }
+
+  // MUTEX_LATCH_UNGUARDED — an ending asserting one member of a mutex group must exclude its partners,
+  // or drift (both latches true) lets the wrong ending fire. The exclusion is the F-E fix, made checkable.
+  const assertsTrue = (c: Condition) => c.op === 'is_true' || (c.op === 'equals' && c.value === 'true');
+  const excludesFalse = (conds: Condition[], field: string) =>
+    conds.some((c) => c.field === field &&
+      (c.op === 'is_false' || (c.op === 'equals' && c.value === 'false') || (c.op === 'not_equals' && c.value === 'true')));
+  for (const group of game.mutexLatches ?? []) {
+    for (const ch of game.chapters) {
+      for (const en of ch.story.endings) {
+        const conds = en.conditions ?? [];
+        for (const m of group.filter((g) => conds.some((c) => c.field === g && assertsTrue(c)))) {
+          for (const partner of group) {
+            if (partner === m || excludesFalse(conds, partner)) continue;
+            warn('MUTEX_LATCH_UNGUARDED',
+              `ending '${en.id}' (chapter '${ch.id}') asserts '${m}' is true but does not exclude its mutex partner '${partner}' — add '${partner} is_false' so drift cannot fire the wrong ending`,
+              en.id);
+          }
+        }
+      }
+    }
   }
 
   return { ok: errors.length === 0, errors, warnings, ledger };
+}
+
+// True if `target` is reachable from the game's start chapter along transitions WITHOUT passing through
+// any `producers` chapter — i.e., a path on which the required var is never written upstream.
+function hasProducerFreePath(game: Game, target: string, producers: Set<string>): boolean {
+  if (producers.has(game.startChapterId)) return false; // every path begins at a producer
+  const adj = new Map(game.chapters.map((c) => [c.id, c.transitions.map((t) => t.goTo)]));
+  const seen = new Set<string>();
+  const stack = [game.startChapterId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (id === target) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const nxt of adj.get(id) ?? []) if (!producers.has(nxt)) stack.push(nxt);
+  }
+  return false;
 }

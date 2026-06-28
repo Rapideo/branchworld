@@ -105,8 +105,22 @@ Run, read, fix, re-run until green:
   *node-determined* outcomes that share state need a latch to tell them apart (e.g. `cave_crossed` to
   separate "got out" from "waited").
 - **No dead-ends.** Every node has an exit or `resolvesEnding`; detours rejoin the spine.
-- **Walker tractability.** Loop-backs and flavor state are the two things that blow the 50k cap. Spend them
-  deliberately.
+- **Ending precedence (v1.4).** When a node resolves, endings are chosen in this order: a node-named
+  `endsWith` pin (F8) > the highest-`priority` among state-matched endings **and** any resource `atZero` death
+  (the death is a candidate by id, *ignoring its own conditions*; a node-named pin yields to a death) >
+  `Story.outOfTimeEndingId` (the distinct "ran out of time" ending) > the catch-all default. `priority` only
+  arbitrates within that middle tier, and a death must out-rank any ending it can co-occur with (lint-enforced,
+  `ATZERO_PRIORITY_DOMINANCE`).
+- **Restoring a survival meter (v1.4).** A time-driven resource can be *raised* by a choice via the
+  `adjust_resource` effect — `{field: <resourceId>, op: 'adjust_resource', value: '20'}` adds, `'-10'` spends —
+  giving `value = clamp(base(time) + offset)`. Use it for "rest / swap the battery / find shelter" (the offset
+  is per-chapter; its effect persists across chapters via the carried resource value).
+- **Walker tractability.** The real cap driver (H10) is **distinct accumulated TIME at reconverging hubs** —
+  the state key includes `time`, so every distinct minute-total at a hub is a distinct state. Flavor state
+  (gate-nothing clues/vars) is the *secondary* axis. So: keep detour **time costs on a coarse grid** (multiples
+  of, say, 5 or 10 min) so same-bucket arrivals collapse, and limit loop-backs + flavor state. For evening-scale
+  chapters that still blow the 50k cap, use `walkStateSpace(story, { timeBucket: N })` — it quantizes time in the
+  dedup key (lossless when detour costs are multiples of `N`).
 
 ---
 

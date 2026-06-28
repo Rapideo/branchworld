@@ -36,3 +36,23 @@ describe('applyResourceStep — time-driven depletion', () => {
     expect(applyResourceStep(s, none, START).state).toBe(s);
   });
 });
+
+describe('applyResourceStep — F6 offset (adjust_resource)', () => {
+  const atWith = (time: number, offset: number): WorldState => ({
+    time, location: 'L', clues: [], inventory: [], visited: [], completedEvents: [],
+    vars: { lamp: 4, dead: false, __roff_lamp: offset },
+  });
+  it('a positive offset raises the time-driven value, clamped at max', () => {
+    expect(applyResourceStep(atWith(960, 1), lampStory(), START).state.vars.lamp).toBe(3); // 4-2+1
+    expect(applyResourceStep(atWith(960, 5), lampStory(), START).state.vars.lamp).toBe(4); // clamps at max
+  });
+  it('a negative offset spends against the value', () => {
+    expect(applyResourceStep(atWith(960, -1), lampStory(), START).state.vars.lamp).toBe(1); // 4-2-1
+  });
+  it('an offset can keep a resource off zero (atZero does not fire)', () => {
+    const r = applyResourceStep(atWith(1020, 2), lampStory(), START); // base 0, +2 -> 2
+    expect(r.state.vars.lamp).toBe(2);
+    expect(r.state.vars.dead).toBe(false);
+    expect(r.atZeroEndingId).toBeUndefined();
+  });
+});

@@ -59,6 +59,12 @@ describe('linter', () => {
     expect(lintStory(s).errors.some((e) => e.code === 'UNDEFINED_VAR')).toBe(true);
   });
 
+  it('RESERVED_VAR_PREFIX — a declared variable using the engine-reserved __ prefix (offset collision guard)', () => {
+    const s = clean();
+    s.variables.push({ name: '__roff_lamp', type: 'number', default: 0, purpose: 'x' });
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('RESERVED_VAR_PREFIX');
+  });
+
   it('flags a no-exit dead-end node', () => {
     const s = clean();
     s.nodes[1].resolvesEnding = false; // node b now has no choices and no resolution
@@ -71,6 +77,13 @@ describe('linter', () => {
     s.nodes[0].choices[0].destination = 'b'; // still reachable -> ok
     s.events[0].recoveryNodeId = 'ghost';
     expect(lintStory(s).errors.some((e) => e.code === 'EVENT_RECOVERY_MISSING')).toBe(true);
+  });
+
+  it('EVENT_PRESENT_NODE_ON_DEMAND — a choice routes into an event present node that has entry effects (H6/A5)', () => {
+    const s = clean();
+    // node 'b' is the event ifPresentNode AND the 'go' choice's destination; give it a consequence (entry effect)
+    s.nodes[1].entryEffects = [{ field: 'knows', op: 'set', value: 'true' }];
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('EVENT_PRESENT_NODE_ON_DEMAND');
   });
 
   it('flags a clock that cannot bite', () => {
@@ -166,6 +179,57 @@ describe('linter', () => {
       ],
     });
     expect(lintStory(story).errors.map((e) => e.code)).not.toContain('SOFT_LOCK');
+  });
+});
+
+describe('A3 — node-named + out-of-time ending references', () => {
+  it('NODE_ENDING_MISSING — a node endsWith an ending that does not exist', () => {
+    const s = clean();
+    s.nodes[1].endsWith = 'ghost_ending';
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('NODE_ENDING_MISSING');
+  });
+  it('OUT_OF_TIME_ENDING_MISSING — outOfTimeEndingId references a missing ending', () => {
+    const s = clean();
+    s.outOfTimeEndingId = 'ghost_ending';
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('OUT_OF_TIME_ENDING_MISSING');
+  });
+  it('does NOT flag a valid endsWith / outOfTimeEndingId (no false positive)', () => {
+    const s = clean();
+    s.nodes[1].endsWith = 'win';
+    s.outOfTimeEndingId = 'win';
+    const codes = lintStory(s).errors.map((e) => e.code);
+    expect(codes).not.toContain('NODE_ENDING_MISSING');
+    expect(codes).not.toContain('OUT_OF_TIME_ENDING_MISSING');
+  });
+});
+
+describe('P1 coherence lints — out-of-time conditions + endsWith choices (F5/F6)', () => {
+  it('OUT_OF_TIME_HAS_CONDITIONS — the out-of-time ending must be condition-free (F5)', () => {
+    const s = clean();
+    s.endings.push({ id: 'oot', name: 'OOT', summary: '', conditions: [{ field: 'knows', op: 'is_true' }] });
+    s.outOfTimeEndingId = 'oot';
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('OUT_OF_TIME_HAS_CONDITIONS');
+  });
+  it('ENDSWITH_WITH_LIVE_CHOICES — a node pins an ending but also has live choices (F6, warning)', () => {
+    const s = clean();
+    s.nodes[1].endsWith = 'win';
+    s.nodes[1].choices = [{ id: 'x', label: 'x', destination: 'a' }];
+    expect(lintStory(s).warnings.map((w) => w.code)).toContain('ENDSWITH_WITH_LIVE_CHOICES');
+  });
+});
+
+describe('NEGATIVE_TIME_DELTA — time is monotonic (H2)', () => {
+  it('flags an add_minutes effect with a negative value', () => {
+    const s = clean();
+    s.nodes[0].choices[0].effects = [{ field: 'time', op: 'add_minutes', value: '-15' }];
+    const r = lintStory(s);
+    expect(r.errors.map((e) => e.code)).toContain('NEGATIVE_TIME_DELTA');
+    expect(r.ok).toBe(false);
+  });
+
+  it('does NOT flag a positive add_minutes (no false positive)', () => {
+    const s = clean(); // its only add_minutes is +90
+    expect(lintStory(s).errors.map((e) => e.code)).not.toContain('NEGATIVE_TIME_DELTA');
   });
 });
 
@@ -346,5 +410,38 @@ describe('linter — resources', () => {
     s.variables.push({ name: 'trust', type: 'number', default: 0, purpose: 't', min: 0, max: 4 } as never);
     s.nodes[0].choices = [{ id: 'x', label: 'x', destination: 'a', effects: [{ field: 'trust', op: 'set', value: '9' }] }];
     expect(lintStory(s).warnings.some((w) => w.code === 'VALUE_OUT_OF_BOUND')).toBe(true);
+  });
+
+  it('ATZERO_PRIORITY_DOMINANCE — a death ending that does not out-rank a co-occurring ending (F2)', () => {
+    const s = resStory();
+    s.variables.push({ name: 'reached', type: 'boolean', default: false, purpose: 'x' } as never);
+    // 'survive' (priority 5) can co-occur with the dead lamp (dead && reached) yet out-ranks the death (priority 0)
+    s.endings.push({ id: 'survive', name: 'Survive', summary: '', conditions: [{ field: 'reached', op: 'is_true' }], priority: 5 } as never);
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('ATZERO_PRIORITY_DOMINANCE');
+  });
+
+  it('does NOT flag a death ending that is exclusive from / out-ranks co-occurring endings (no false positive)', () => {
+    expect(lintStory(resStory()).errors.map((e) => e.code)).not.toContain('ATZERO_PRIORITY_DOMINANCE');
+  });
+
+  it('ATZERO_PRIORITY_DOMINANCE — flags a death masked despite contradictory death conditions (FN fix)', () => {
+    // The atZero death fires IGNORING its own conditions, so the lint must not let the death's own conditions
+    // (here `rescued is_false`) mark it "exclusive" from a higher-priority co-occurring ending.
+    const s = resStory();
+    s.variables.push({ name: 'rescued', type: 'boolean', default: false, purpose: 'r' } as never);
+    s.endings.find((e) => e.id === 'ending_dark')!.conditions = [{ field: 'rescued', op: 'is_false' }];
+    s.endings.push({ id: 'survive', name: 'S', summary: '', conditions: [{ field: 'rescued', op: 'is_true' }], priority: 5 } as never);
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('ATZERO_PRIORITY_DOMINANCE');
+  });
+
+  it('ADJUST_RESOURCE_NOT_TIME_DRIVEN — adjust_resource on a non-time-driven field (F6)', () => {
+    const s = resStory(); // lamp is time-driven; 'dead' is a plain boolean var
+    s.nodes[0].choices = [{ id: 'x', label: 'x', destination: 'a', effects: [{ field: 'dead', op: 'adjust_resource', value: '1' }] }];
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('ADJUST_RESOURCE_NOT_TIME_DRIVEN');
+  });
+  it('does NOT flag adjust_resource on a time-driven resource (no false positive)', () => {
+    const s = resStory();
+    s.nodes[0].choices = [{ id: 'x', label: 'x', destination: 'a', effects: [{ field: 'lamp', op: 'adjust_resource', value: '2' }] }];
+    expect(lintStory(s).errors.map((e) => e.code)).not.toContain('ADJUST_RESOURCE_NOT_TIME_DRIVEN');
   });
 });

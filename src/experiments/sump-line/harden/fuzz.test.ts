@@ -439,11 +439,11 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
     expect(walk.softlocks).toContain('n_trap'); // the walker is NOT — it catches what lint can't
   });
 
-  // PROBE-B: negative add_minutes rewinds the clock and REVIVES a time-driven resource.
-  // Proves systems-finding S1: F6's "time-driven meters can only fall" is false under rewind,
-  // and the linter has no NEGATIVE_TIME_DELTA guard. (The team verified this by reading code;
-  // here it actually runs.)
-  it('PROBE-B: a negative add_minutes rewinds time and pushes a time-driven lamp back UP (lint clean)', () => {
+  // PROBE-B (CLOSED by A2): a negative add_minutes is now both lint-flagged and runtime-refused.
+  // Was systems-finding S1 / H2: rewind made F6's "time-driven meters can only fall" false and the
+  // linter had no NEGATIVE_TIME_DELTA guard. A2 added the lint + the "time is monotonic" invariant;
+  // this probe now proves the hole is closed (it actually runs).
+  it('PROBE-B (closed): a negative add_minutes is lint-flagged and cannot rewind time (H2 fixed)', () => {
     const story: Story = {
       id: 'probe_rewind',
       title: 'Rewind',
@@ -472,27 +472,28 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
       ],
       endings: [{ id: 'e_default', name: 'Default', conditions: [], summary: '', isDefault: true }],
     };
-    expect(lintStory(story).errors).toEqual([]); // no rule forbids negative time
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('NEGATIVE_TIME_DELTA'); // now caught
 
     const eng = new GameEngine(story);
     eng.start();
     const atMid = eng.choose('c_advance'); // time 08:30, lamp = 100 - 10*floor(30/10) = 70
     const lampMid = Number(atMid.state.vars.lamp);
     const tMid = atMid.state.time;
-    const atBack = eng.choose('c_rewind'); // time 08:10, lamp = 100 - 10*floor(10/10) = 90
+    const atBack = eng.choose('c_rewind'); // -20 clamped away: time holds 08:30, lamp holds 70
     const lampBack = Number(atBack.state.vars.lamp);
     const tBack = atBack.state.time;
 
     expect(lampMid).toBe(70);
-    expect(lampBack).toBe(90);
-    expect(lampBack).toBeGreaterThan(lampMid); // the "can't be restored" meter went UP
-    expect(tBack).toBeLessThan(tMid); // time ran backwards
+    expect(tBack).toBe(tMid); // the rewind was refused — time did not run backwards
+    expect(lampBack).toBe(lampMid); // and the time-driven meter did NOT revive
   });
 
   // PROBE-C: an atZero ending short-circuits the priority resolver.
-  // Proves systems-finding S5: the resource at-zero ending fires BEFORE resolveEnding, so a
-  // lower-priority dark ending preempts a higher-priority state-matched ending.
-  it('PROBE-C: an atZero ending preempts a higher-priority ending the state actually matches', () => {
+  // PROBE-C (CLOSED by A3 + guarded by F2): the atZero ending no longer short-circuits — it competes by
+  // priority, so a higher-priority state-matched ending CAN win (the H3 engine fix). This thin story — a
+  // survival ending out-ranking the death WITHOUT guarding against it — is exactly what the F2
+  // ATZERO_PRIORITY_DOMINANCE lint now flags. So this probe proves both the engine behavior and the lint.
+  it('PROBE-C (closed): an atZero ending competes by priority; the higher-priority state ending wins (H3 fixed)', () => {
     const story: Story = {
       id: 'probe_atzero',
       title: 'AtZero',
@@ -523,17 +524,69 @@ describe('Track A — targeted probes (execute-proofs for the v1.4 punch list)',
         { id: 'e_dark', name: 'Dark (lamp died)', conditions: [{ field: 'lamp', op: 'lte', value: '0' }], summary: '', priority: 1 },
       ],
     };
-    expect(lintStory(story).errors).toEqual([]);
+    // F2 now flags this exact authoring (death 'e_dark' pri1 out-ranked by co-occurring 'e_grey' pri5, unguarded):
+    expect(lintStory(story).errors.map((e) => e.code)).toContain('ATZERO_PRIORITY_DOMINANCE');
 
     const eng = new GameEngine(story);
     eng.start();
     const end = eng.choose('c_cross'); // lamp 10 → 0 at +10..15; crossed=true
-    // The engine resolves the DARK ending (atZero short-circuit), even though...
-    expect(end.endingReached?.id).toBe('e_dark');
-    // ...the priority resolver over the SAME final state would pick the higher-priority grey ending.
+    // The engine now resolves the higher-priority GREY ending (atZero competes, no longer short-circuits)...
+    expect(end.endingReached?.id).toBe('e_grey');
+    // ...matching what the priority resolver over the same final state intends.
     const byPriority = resolveEnding(end.state, story);
     expect(byPriority?.id).toBe('e_grey');
-    expect(end.endingReached?.id).not.toBe(byPriority?.id); // engine outcome ≠ priority intent
+    expect(end.endingReached?.id).toBe(byPriority?.id); // engine outcome == priority intent
+  });
+
+  // PROBE-F (A3 + F3): a node with endsWith and NO resolvesEnding still resolves — endsWith is a resolution
+  // trigger (the F3 wiring fix) — to the named ending even though the state resolver would pick the default.
+  // The node is reached well before the deadline, so endsWith is the ONLY trigger.
+  it('PROBE-F: a node with endsWith (no resolvesEnding) triggers resolution to the named ending', () => {
+    const story: Story = {
+      id: 'probe_named', title: 'Named', startNodeId: 'n0', startTime: '08:00', deadline: '12:00',
+      startLocation: 'loc_a', variables: [{ name: 'crossed', type: 'boolean', default: false, purpose: 'x' }],
+      locations: [{ id: 'loc_a', name: 'A' }], events: [],
+      nodes: [
+        { id: 'n0', title: 's', body: '', choices: [
+          { id: 'c', label: 'go', destination: 'n_end', effects: [{ field: 'time', op: 'add_minutes', value: '30' }] },
+          { id: 'c_long', label: 'long', destination: 'n_long', effects: [{ field: 'time', op: 'add_minutes', value: '240' }] },
+        ] },
+        { id: 'n_end', title: 'e', body: '', choices: [], endsWith: 'e_special' }, // no resolvesEnding -> endsWith must trigger
+        { id: 'n_long', title: 'l', body: '', choices: [], resolvesEnding: true },
+      ],
+      endings: [
+        { id: 'e_default', name: 'D', conditions: [], summary: '', isDefault: true },
+        { id: 'e_special', name: 'Special', conditions: [{ field: 'crossed', op: 'is_true' }], summary: '', priority: 0 },
+      ],
+    };
+    expect(lintStory(story).errors).toEqual([]);
+    const eng = new GameEngine(story);
+    eng.start();
+    const end = eng.choose('c'); // time 08:30, well before 12:00; crossed unset -> state picks default; endsWith forces e_special
+    expect(end.endingReached?.id).toBe('e_special');
+  });
+
+  // PROBE-G (F6/A6 closed): a choice can RAISE a time-driven resource via adjust_resource (swap the battery) —
+  // the old engine forbade it (time-driven meters only ever fell). value = clamp(base(time) + offset).
+  it('PROBE-G: adjust_resource lets a choice raise a time-driven lamp (F6 closed)', () => {
+    const story: Story = {
+      id: 'probe_offset', title: 'Offset', startNodeId: 'n0', startTime: '08:00', deadline: '08:35',
+      startLocation: 'loc_a', variables: [], locations: [{ id: 'loc_a', name: 'A' }], events: [],
+      resources: [{ id: 'lamp', label: 'Lamp', min: 0, max: 100, start: 100, depletion: { everyMinutes: 10, amount: 10 } }],
+      nodes: [
+        { id: 'n0', title: 's', body: '', choices: [{ id: 'c_burn', label: 'burn 30', destination: 'n1', effects: [{ field: 'time', op: 'add_minutes', value: '30' }] }] },
+        { id: 'n1', title: 'm', body: '', choices: [{ id: 'c_swap', label: 'swap battery (+20)', destination: 'n_end', effects: [{ field: 'lamp', op: 'adjust_resource', value: '20' }, { field: 'time', op: 'add_minutes', value: '5' }] }] },
+        { id: 'n_end', title: 'e', body: '', choices: [], resolvesEnding: true },
+      ],
+      endings: [{ id: 'd', name: 'D', conditions: [], summary: '', isDefault: true }],
+    };
+    expect(lintStory(story).errors).toEqual([]);
+    const eng = new GameEngine(story);
+    eng.start();
+    const mid = eng.choose('c_burn'); // 08:30, lamp = 100 - 10*3 = 70
+    expect(Number(mid.state.vars.lamp)).toBe(70);
+    const after = eng.choose('c_swap'); // 08:35, base 70, +20 offset -> 90 (the meter went UP)
+    expect(Number(after.state.vars.lamp)).toBe(90);
   });
 
   // PROBE-D: the coercion asymmetry behind silent cross-chapter contract drift.

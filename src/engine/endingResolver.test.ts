@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { resolveEnding } from './endingResolver';
-import type { Story, WorldState } from './types';
+import { resolveEnding, resolveEndingAt } from './endingResolver';
+import type { Story, WorldState, StoryNode } from './types';
 import { mkStory } from '../test/storyFixture';
 
 function storyWith(endings: Story['endings']): Story {
@@ -59,5 +59,89 @@ describe('endingResolver', () => {
     });
     const state = { time: 0, location: 'loc_a', clues: [], inventory: [], visited: [], completedEvents: [], vars: { score: 10 } };
     expect(resolveEnding(state, story)?.id).toBe('first');
+  });
+});
+
+describe('resolveEndingAt — node-named, atZero-by-priority, out-of-time (A3)', () => {
+  const mkNode = (over: Partial<StoryNode> = {}): StoryNode => ({ id: 'n', title: 'N', body: '', choices: [], ...over });
+
+  it('a node-named ending (endsWith) resolves directly, overriding a state match (F8)', () => {
+    const story = storyWith([
+      { id: 'win', name: 'W', summary: '', conditions: [{ field: 'score', op: 'gte', value: '3' }], priority: 9 },
+      { id: 'special', name: 'S', summary: '', conditions: [{ field: 'nope', op: 'is_true' }] },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]);
+    expect(resolveEndingAt(s({ score: 9 }), story, mkNode({ endsWith: 'special' }), undefined, false)?.id).toBe('special');
+  });
+
+  it('the atZero ending competes by priority — a higher-priority state ending wins (H3)', () => {
+    const story = storyWith([
+      { id: 'grey', name: 'Grey', summary: '', conditions: [{ field: 'crossed', op: 'is_true' }], priority: 5 },
+      { id: 'dark', name: 'Dark', summary: '', conditions: [{ field: 'lamp', op: 'lte', value: '0' }], priority: 1 },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]);
+    expect(resolveEndingAt(s({ crossed: 1, lamp: 0 }), story, mkNode({ resolvesEnding: true }), 'dark', false)?.id).toBe('grey');
+  });
+
+  it('the atZero ending wins when it is the highest-priority candidate', () => {
+    const story = storyWith([
+      { id: 'grey', name: 'Grey', summary: '', conditions: [{ field: 'crossed', op: 'is_true' }], priority: 1 },
+      { id: 'dark', name: 'Dark', summary: '', conditions: [{ field: 'lamp', op: 'lte', value: '0' }], priority: 5 },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]);
+    expect(resolveEndingAt(s({ crossed: 1, lamp: 0 }), story, mkNode({ resolvesEnding: true }), 'dark', false)?.id).toBe('dark');
+  });
+
+  it('past the deadline with no match resolves the distinct out-of-time ending (H4)', () => {
+    const story: Story = { ...storyWith([
+      { id: 'oot', name: 'Out of time', summary: '', conditions: [{ field: 'nope', op: 'is_true' }] },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]), outOfTimeEndingId: 'oot' };
+    expect(resolveEndingAt(s({ score: 0 }), story, mkNode({}), undefined, true)?.id).toBe('oot');
+  });
+
+  it('past the deadline falls back to default when no out-of-time ending is declared', () => {
+    const story = storyWith([
+      { id: 'win', name: 'W', summary: '', conditions: [{ field: 'score', op: 'gte', value: '3' }] },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]);
+    expect(resolveEndingAt(s({ score: 0 }), story, mkNode({}), undefined, true)?.id).toBe('default');
+  });
+
+  it('a committed state ending beats the out-of-time fallback even past the deadline', () => {
+    const story: Story = { ...storyWith([
+      { id: 'win', name: 'W', summary: '', conditions: [{ field: 'score', op: 'gte', value: '3' }], priority: 1 },
+      { id: 'oot', name: 'OOT', summary: '', conditions: [{ field: 'nope', op: 'is_true' }] },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]), outOfTimeEndingId: 'oot' };
+    expect(resolveEndingAt(s({ score: 9 }), story, mkNode({ resolvesEnding: true }), undefined, true)?.id).toBe('win');
+  });
+
+  it('the atZero death still resolves even when it aliases the out-of-time ending (pre-merge fix)', () => {
+    const story: Story = { ...storyWith([
+      { id: 'death', name: 'Death', summary: '', conditions: [{ field: 'nope', op: 'is_true' }], priority: 0 },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]), outOfTimeEndingId: 'death' };
+    // 'death' is BOTH the resource atZero ending AND outOfTimeEndingId; a resource death must still fire (not default)
+    expect(resolveEndingAt(s({}), story, mkNode({ resolvesEnding: true }), 'death', false)?.id).toBe('death');
+  });
+
+  it('a resource death beats a node-named pin — death wins regardless of priority (F3)', () => {
+    const story = storyWith([
+      { id: 'pin', name: 'Pin', summary: '', conditions: [{ field: 'nope', op: 'is_true' }], priority: 9 },
+      { id: 'death', name: 'Death', summary: '', conditions: [{ field: 'dead', op: 'is_true' }], priority: 1 },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]);
+    // node pins 'pin' (pri 9) but the lamp died → 'death' (pri 1) wins anyway
+    expect(resolveEndingAt(s({ dead: 1 }), story, mkNode({ endsWith: 'pin' }), 'death', false)?.id).toBe('death');
+  });
+
+  it('the out-of-time ending never fires as a state match — only via the deadline path (F3)', () => {
+    const story: Story = { ...storyWith([
+      { id: 'oot', name: 'OOT', summary: '', conditions: [], priority: 9 }, // empty conditions would otherwise always match
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]), outOfTimeEndingId: 'oot' };
+    // not past the deadline → oot must NOT fire by state match; falls to default
+    expect(resolveEndingAt(s({}), story, mkNode({ resolvesEnding: true }), undefined, false)?.id).toBe('default');
   });
 });

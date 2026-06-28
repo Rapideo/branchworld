@@ -17,6 +17,7 @@ describe('ch1_descent — "The Pulse" (expanded, ~26 beats)', () => {
     expect(r.capHit).toBe(false);
     expect(r.softlocks).toEqual([]);
     expect(r.orphanEndings).toEqual([]);
+    expect(r.eventPresent.filter((e) => !e.ok)).toEqual([]); // H8: every scheduled event's present branch is reachable
   });
 
   it('looking at the low way does NOT seal the cave early (H6: looking ≠ sealing)', () => {

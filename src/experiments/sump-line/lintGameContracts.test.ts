@@ -80,4 +80,49 @@ describe('A1 — cross-chapter contract + latch linter', () => {
     const r = lintGameContracts(g);
     expect(codes(r.warnings)).toContain('LATCH_IN_CHOICE_EFFECT');
   });
+
+  // ---- v1.1: ancestor-aware + annotated checks (opt-in, zero-FP by author assertion) ----
+
+  it('CONTRACT_READ_NO_ANCESTOR_PRODUCER — a carriedRequired var no ancestor chapter writes', () => {
+    const g = clone(); // ch2_high.carriedRequired includes cave_all_together; ch1 is its sole ancestor
+    // strip every write of cave_all_together from ch1 — models an upstream rename leaving it unwritten
+    const ch1 = chapter(g, 'ch1_descent').story;
+    for (const n of ch1.nodes) {
+      if (n.entryEffects) n.entryEffects = n.entryEffects.filter((e) => e.field !== 'cave_all_together');
+      for (const c of n.choices ?? []) if (c.effects) c.effects = c.effects.filter((e) => e.field !== 'cave_all_together');
+    }
+    const r = lintGameContracts(g);
+    expect(codes(r.errors)).toContain('CONTRACT_READ_NO_ANCESTOR_PRODUCER');
+    expect(r.errors.find((e) => e.code === 'CONTRACT_READ_NO_ANCESTOR_PRODUCER')!.message).toContain('cave_all_together');
+  });
+
+  it('CONTRACT_READ_NO_ANCESTOR_PRODUCER — does NOT fire when an ancestor writes it (no false positive)', () => {
+    expect(codes(lintGameContracts(sumpLine).errors)).not.toContain('CONTRACT_READ_NO_ANCESTOR_PRODUCER');
+  });
+
+  it('CONTRACT_DOMAIN_VIOLATION — a value compared outside a declared domain', () => {
+    const g = clone(); // domains.companion_status = [with_you, hurt, lost]
+    const node = chapter(g, 'ch2_high').story.nodes.find((n) => n.choices.some((c) => c.id === 'c_haul'))!;
+    node.choices.find((c) => c.id === 'c_haul')!.conditions = [{ field: 'companion_status', op: 'equals', value: 'injured' }];
+    expect(codes(lintGameContracts(g).errors)).toContain('CONTRACT_DOMAIN_VIOLATION');
+  });
+
+  it('MUTEX_LATCH_UNGUARDED — an ending asserts one mutex latch without excluding its partner', () => {
+    const g = clone(); // mutexLatches = [[cave_all_together, cave_someone_lost]]
+    const end = chapter(g, 'ch2_high').story.endings.find((e) => e.id === 'end_daylight_all_three')!;
+    end.conditions = end.conditions.filter((c) => c.field !== 'cave_someone_lost'); // drop the partner guard
+    expect(codes(lintGameContracts(g).warnings)).toContain('MUTEX_LATCH_UNGUARDED');
+  });
+
+  it('CONTRACT_UNKNOWN_ANNOTATION — a domains entry naming a var no chapter has (F4)', () => {
+    const g = clone();
+    g.domains = { ...g.domains, ghost_var: ['a', 'b'] };
+    expect(codes(lintGameContracts(g).errors)).toContain('CONTRACT_UNKNOWN_ANNOTATION');
+  });
+
+  it('CONTRACT_UNKNOWN_ANNOTATION — a carriedRequired naming a var no chapter has (F4)', () => {
+    const g = clone();
+    chapter(g, 'ch2_high').carriedRequired = ['ghost_required'];
+    expect(codes(lintGameContracts(g).errors)).toContain('CONTRACT_UNKNOWN_ANNOTATION');
+  });
 });

@@ -47,4 +47,15 @@ describe('scheduledEvents', () => {
     expect(r.state.clues).toEqual([]);
     expect(r.log).toEqual([]);
   });
+
+  // H7 regression lock: a STATE condition in the trigger gates the event, so a carried flag can suppress it
+  // (the engine evaluates the full trigger, not just the time part). This is what closes H7 — a carried-sealed
+  // player never reaches the present node whose only choice is gated on the same flag.
+  it('a state condition in the trigger suppresses the event when the carried flag fails it (H7)', () => {
+    const s = story();
+    s.events[0].trigger = [{ field: 'time', op: 'time_after', value: '16:10' }, { field: 'sealed', op: 'is_false' }];
+    const present = (sealed: boolean): WorldState => ({ ...at(975, 'Diner'), vars: { sealed } });
+    expect(checkScheduledEvents(present(true), s).routedNodeId).toBeUndefined();  // sealed -> barred from present
+    expect(checkScheduledEvents(present(false), s).routedNodeId).toBe('n_witness'); // not sealed -> fires present
+  });
 });

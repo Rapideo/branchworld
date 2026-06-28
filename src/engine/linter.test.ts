@@ -418,6 +418,16 @@ describe('linter — resources', () => {
     expect(lintStory(resStory()).errors.map((e) => e.code)).not.toContain('ATZERO_PRIORITY_DOMINANCE');
   });
 
+  it('ATZERO_PRIORITY_DOMINANCE — flags a death masked despite contradictory death conditions (FN fix)', () => {
+    // The atZero death fires IGNORING its own conditions, so the lint must not let the death's own conditions
+    // (here `rescued is_false`) mark it "exclusive" from a higher-priority co-occurring ending.
+    const s = resStory();
+    s.variables.push({ name: 'rescued', type: 'boolean', default: false, purpose: 'r' } as never);
+    s.endings.find((e) => e.id === 'ending_dark')!.conditions = [{ field: 'rescued', op: 'is_false' }];
+    s.endings.push({ id: 'survive', name: 'S', summary: '', conditions: [{ field: 'rescued', op: 'is_true' }], priority: 5 } as never);
+    expect(lintStory(s).errors.map((e) => e.code)).toContain('ATZERO_PRIORITY_DOMINANCE');
+  });
+
   it('ADJUST_RESOURCE_NOT_TIME_DRIVEN — adjust_resource on a non-time-driven field (F6)', () => {
     const s = resStory(); // lamp is time-driven; 'dead' is a plain boolean var
     s.nodes[0].choices = [{ id: 'x', label: 'x', destination: 'a', effects: [{ field: 'dead', op: 'adjust_resource', value: '1' }] }];

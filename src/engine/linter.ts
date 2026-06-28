@@ -419,7 +419,9 @@ export function lintResources(story: Story): LintIssue[] {
   for (const r of resources) {
     const death = r.atZero?.ending ? endingsById.get(r.atZero.ending) : undefined;
     if (!death || death.isDefault) continue;
-    const deathConds: Condition[] = [...(death.conditions ?? [])];
+    // NOT death.conditions: at runtime the atZero death fires by id, ignoring its own conditions, so using
+    // them here would let a death with contradictory conditions look "exclusive" and slip the guard (FN).
+    const deathConds: Condition[] = [];
     if (r.atZero?.setFlag) deathConds.push({ field: r.atZero.setFlag, op: 'is_true' });
     for (const o of nonDefaultEndings) {
       if (o.id === death.id) continue;

@@ -30,8 +30,10 @@ export function resolveEndingAt(
   //    candidate here — it fires only via the deadline path below, so it may be condition-free.
   const candidates = story.endings.filter(
     (e) =>
-      !e.isDefault && e.id !== story.outOfTimeEndingId &&
-      (e.id === atZeroEndingId || evaluateConditions(e.conditions, s)),
+      !e.isDefault &&
+      // a resource death (atZero) is ALWAYS a candidate — even if it doubles as the out-of-time ending; the
+      // out-of-time ending is excluded from the state-match path only (it otherwise fires via the deadline path).
+      (e.id === atZeroEndingId || (e.id !== story.outOfTimeEndingId && evaluateConditions(e.conditions, s))),
   );
   if (candidates.length) {
     return candidates.reduce((best, e) => ((e.priority ?? 0) > (best.priority ?? 0) ? e : best));

@@ -117,6 +117,15 @@ describe('resolveEndingAt — node-named, atZero-by-priority, out-of-time (A3)',
     expect(resolveEndingAt(s({ score: 9 }), story, mkNode({ resolvesEnding: true }), undefined, true)?.id).toBe('win');
   });
 
+  it('the atZero death still resolves even when it aliases the out-of-time ending (pre-merge fix)', () => {
+    const story: Story = { ...storyWith([
+      { id: 'death', name: 'Death', summary: '', conditions: [{ field: 'nope', op: 'is_true' }], priority: 0 },
+      { id: 'default', name: 'D', summary: '', conditions: [], isDefault: true },
+    ]), outOfTimeEndingId: 'death' };
+    // 'death' is BOTH the resource atZero ending AND outOfTimeEndingId; a resource death must still fire (not default)
+    expect(resolveEndingAt(s({}), story, mkNode({ resolvesEnding: true }), 'death', false)?.id).toBe('death');
+  });
+
   it('a resource death beats a node-named pin — death wins regardless of priority (F3)', () => {
     const story = storyWith([
       { id: 'pin', name: 'Pin', summary: '', conditions: [{ field: 'nope', op: 'is_true' }], priority: 9 },

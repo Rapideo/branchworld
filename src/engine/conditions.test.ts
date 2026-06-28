@@ -23,6 +23,14 @@ describe('conditions', () => {
     expect(evaluateCondition({ field: 'clues', op: 'has_clue', value: 'plate' }, base)).toBe(false);
     expect(evaluateCondition({ field: 'visited', op: 'has_visited', value: 'n1' }, base)).toBe(true);
   });
+  it('handles has_item (counted inventory: qty >= 1, or >= value)', () => {
+    const s = { ...base, vars: { ...base.vars, thermite: 2 } };
+    expect(evaluateCondition({ field: 'thermite', op: 'has_item' }, s)).toBe(true);             // 2 >= 1
+    expect(evaluateCondition({ field: 'thermite', op: 'has_item', value: '2' }, s)).toBe(true); // 2 >= 2
+    expect(evaluateCondition({ field: 'thermite', op: 'has_item', value: '3' }, s)).toBe(false);// 2 >= 3
+    const empty = { ...base, vars: { ...base.vars, thermite: 0 } };
+    expect(evaluateCondition({ field: 'thermite', op: 'has_item' }, empty)).toBe(false);         // 0 >= 1
+  });
   it('handles engine-derived time', () => {
     expect(evaluateCondition({ field: 'time', op: 'time_after', value: '16:10' }, base)).toBe(true);
     expect(evaluateCondition({ field: 'time', op: 'time_before', value: '16:10' }, base)).toBe(false);

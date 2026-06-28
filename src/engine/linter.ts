@@ -1,8 +1,9 @@
-import type { Story, Choice, Condition, Effect, LintResult, LintIssue } from './types';
+import type { Story, Choice, Condition, Effect, LintResult, LintIssue, Profile } from './types';
 import { parseTime } from './time';
 import { collectSymbols } from './symbols';
 import type { StorySymbols } from './symbols';
 import { coerce } from './conditions';
+import { resolveProfile, validateProfile } from './profile';
 
 const RESERVED_FIELDS = new Set(['time', 'location']);
 const NON_VAR_EFFECT_OPS = new Set<Effect['op']>([
@@ -90,7 +91,7 @@ function timeBounds(story: Story): { maxTime: number; minTime: number } {
   return { maxTime, minTime };
 }
 
-export function lintStory(story: Story): LintResult {
+export function lintStory(story: Story, inherited?: Profile): LintResult {
   const errors: LintIssue[] = [];
   const warnings: LintIssue[] = [];
   const err = (code: string, message: string, where?: string) =>
@@ -105,6 +106,7 @@ export function lintStory(story: Story): LintResult {
   for (const r of story.resources ?? []) varNames.add(r.id);
   const itemVars = new Set(story.variables.filter((v) => v.kind === 'item').map((v) => v.name));
   const sym = collectSymbols(story);
+  const profile = resolveProfile(story, inherited);
 
   // reserved namespace: the '__' prefix is engine-internal (e.g. resource offsets stored as `__roff_<id>`)
   for (const v of story.variables) {
@@ -324,7 +326,7 @@ export function lintStory(story: Story): LintResult {
   }
 
   // time-literal range: every time_* condition/trigger value must sit in [startTime, deadline]
-  if (story.deadline !== undefined) {
+  if (profile.clock === 'timed' && story.deadline !== undefined) {
     const startMin = parseTime(story.startTime);
     const deadlineMin = parseTime(story.deadline);
     const checkTimeLiterals = (cs: Condition[] | undefined, where: string) => {
@@ -363,6 +365,8 @@ export function lintStory(story: Story): LintResult {
     if (issue.level === 'error') errors.push(issue);
     else warnings.push(issue);
   }
+
+  for (const i of validateProfile(story, inherited)) err(i.code, i.message, i.where);
 
   return { ok: errors.length === 0, errors, warnings };
 }

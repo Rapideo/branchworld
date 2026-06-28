@@ -9,6 +9,28 @@
 > (the team + fuzzer pass) and [`ENGINE-ASSESSMENT.md`](src/experiments/sump-line/ENGINE-ASSESSMENT.md)
 > (the F1–F9 log). The authoring method is in [`docs/authoring-method.md`](docs/authoring-method.md).
 
+## Status — 2026-06-28 (Profile framework + WS-D/D1 shipped) — resume anchor
+
+**WS-D/D1 DONE** on branch `feature/engine-profile`. The `clock` dimension of the profile framework is fully
+shipped: `Profile` type, `clockDimension` validator, `resolveProfile`/`validateProfile`, presets
+`TIME_PRESSURE_SURVIVAL`/`UNTIMED_BRANCHING`, profile-aware `lintStory` + `lintGame`, both existing games
+stamped, untimed reference game (`untimedExample`), and authoring guides under `docs/authoring/`. **Nothing
+pushed.**
+
+- ✅ **Profile types + barrel** — `Story.deadline` optional, `Story.profile`, `Game.profile`; `src/engine/profile.ts` + barrel export.
+- ✅ **Conformance validation** — `PROFILE_TIMED_NEEDS_DEADLINE`, `PROFILE_UNTIMED_HAS_{DEADLINE,OOT_ENDING,TIME_RESOURCE,TIME_CONDITION}`, `PROFILE_CHAPTER_CONFLICT`.
+- ✅ **Game retrofit** — `sumpLine` + `countinghouse` stamped `TIME_PRESSURE_SURVIVAL` (no-op; all prior tests green).
+- ✅ **Untimed reference game** — `src/container/untimedExample.ts` + test; lints clean, no softlocks, all three endings reachable.
+- ✅ **Authoring guides** — `docs/authoring/time-pressure-survival.md` + `docs/authoring/untimed-branching.md`.
+
+**Deferred boundary (deliberate, not gaps):**
+- `'long-horizon'` clock value + per-chapter scope toggle — ships when a second project needs it.
+- `travel` / `investigation` dimensions + `incompatiblePairs` cross-dimension gate — sequenced after the D2 prototype corpus.
+- D2 prototype corpus (10–20 small games exercising different profile combinations) — empirical stress-test of the framework.
+- `add_minutes`/walker-key optimization for untimed (drop time from the walk key when no effect advances the clock) — validator does not enforce absence of `add_minutes`; guide documents the caveat.
+
+**NEXT (Matthew's call):** (a) **expand the heist** (the loud route + remaining chapters); (b) **D2 prototype corpus** (10–20 small games across profiles); (c) **next capability** (characters / timed challenges); (d) **WS-G front-end**.
+
 ## Status — 2026-06-27 (The Countinghouse heist slice) — resume anchor
 
 Engine v1.4 is **merged** (`master`, tag `engine-v1.4`) and **counted inventory** shipped (`58526b6`). The
@@ -158,8 +180,8 @@ for the project at hand (resources, scheduled events, multi-chapter carry, etc.)
 
 | Item | What | Size | Proposed priority |
 |---|---|---|---|
-| D1 | Define the toggle surface (which primitives are opt-in per `Story`/`Game`) and the lint profile per toggle. A small design spike, then implementation. **NOW IN DESIGN** (2026-06-28 brainstorm — the profile framework + compatible-sets + clock-model dimension; spec forthcoming under `docs/superpowers/specs/`). | M | P1 |
-| D2 | **Prototype game corpus** (Matthew, 2026-06-28) — build **10–20 small "prototype" games** that each use a different combination of engine features / a different compatible set (timed survival, untimed branching, investigation, free-travel, long-horizon, etc.). Purpose: empirically prove the profile/compatible-sets framework, surface incompatibilities the validator must catch, and let the strongest combos graduate into shipped **presets** + their authoring guides. Sequenced *after* the profile framework (D1) lands so each prototype declares a real profile. | M–L | P2 |
+| D1 | Define the toggle surface (which primitives are opt-in per `Story`/`Game`) and the lint profile per toggle. **✅ DONE** (2026-06-28, branch `feature/engine-profile`) — `clock` dimension shipped: `Profile` type, `clockDimension` validator, `resolveProfile`/`validateProfile`, presets, profile-aware lintStory + lintGame, both games stamped, untimed reference game, authoring guides. Deferred: long-horizon clock value, travel/investigation dimensions, `incompatiblePairs`, `add_minutes`/walker-key optimization. | M | **✅ DONE** |
+| D2 | **Prototype game corpus** (Matthew) — build **10–20 small "prototype" games** that each use a different combination of engine features / a different compatible set (timed survival, untimed branching, investigation, free-travel, long-horizon, etc.). Purpose: empirically prove the profile/compatible-sets framework, surface incompatibilities the validator must catch, and let the strongest combos graduate into shipped **presets** + their authoring guides. Each prototype declares a real `Game.profile`. | M–L | P2 |
 
 ### WS-E — Tooling for book scale
 *Goal: the tools the method's backlog named, now re-ranked by the hardening pass. (Several overlap WS-A.)*

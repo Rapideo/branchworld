@@ -1,4 +1,5 @@
 import type { Game } from '../../../container';
+import { TIME_PRESSURE_SURVIVAL } from '../../../engine';
 import { ch1WayIn } from './ch1WayIn';
 import { ch2WayOut } from './ch2WayOut';
 
@@ -22,6 +23,7 @@ export const countinghouse: Game = {
   id: 'countinghouse',
   title: 'The Countinghouse',
   startChapterId: 'ch1_wayin',
+  profile: TIME_PRESSURE_SURVIVAL,
   carry: { vars: 'all', resources: ['lead'], clues: true, inventory: true },
   gameDeadlineMinutes: 240,
   domains: { partner_status: ['steady', 'frayed', 'hurt', 'gone'] },

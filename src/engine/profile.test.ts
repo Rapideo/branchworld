@@ -50,4 +50,11 @@ describe('profile — the clock dimension validator', () => {
     expect(resolveProfile(timedStory(), UNTIMED_BRANCHING)).toEqual({ clock: 'untimed' });              // inherited fills
     expect(resolveProfile({ ...timedStory(), profile: { clock: 'timed' } }, UNTIMED_BRANCHING)).toEqual({ clock: 'timed' }); // story wins
   });
+  it('a timed story (default profile) with no deadline raises PROFILE_TIMED_NEEDS_DEADLINE', () => {
+    const s: Story = { id: 'x', title: 'X', startNodeId: 'a', startTime: '00:00', startLocation: 'L',
+      variables: [], locations: [{ id: 'L', name: 'L' }], events: [],
+      nodes: [{ id: 'a', title: 'A', body: '', choices: [], resolvesEnding: true }],
+      endings: [{ id: 'd', name: 'D', summary: '', conditions: [], isDefault: true }] };
+    expect(validateProfile(s).map((i) => i.code)).toContain('PROFILE_TIMED_NEEDS_DEADLINE');
+  });
 });

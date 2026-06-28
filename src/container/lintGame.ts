@@ -1,4 +1,4 @@
-import { lintStory } from '../engine';
+import { lintStory, resolveProfile } from '../engine';
 import type { LintIssue } from '../engine';
 import type { Game } from './types';
 import { lintGameContracts } from './lintGameContracts';
@@ -31,13 +31,15 @@ export function lintGame(game: Game): { ok: boolean; errors: LintIssue[]; warnin
     }
   }
 
-  // v1 requires a uniform clock across a game; every EXPLICIT clock declaration (game + chapters) must agree.
-  const declaredClocks = new Set<string>();
-  if (game.profile) declaredClocks.add(game.profile.clock);
-  for (const ch of game.chapters) if (ch.story.profile) declaredClocks.add(ch.story.profile.clock);
-  if (declaredClocks.size > 1) {
+  // v1 requires a uniform clock across a game. Compare each chapter's RESOLVED clock (its own profile, else
+  // the inherited game profile, else the timed default) PLUS the game's own declaration — so an
+  // implicitly-timed chapter under an explicitly-untimed sibling, or a chapter overriding the game, is caught.
+  const clocks = new Set(game.chapters.map((ch) => resolveProfile(ch.story, game.profile).clock));
+  if (game.profile) clocks.add(game.profile.clock);
+  if (clocks.size > 1) {
     errors.push({ level: 'error', code: 'PROFILE_CHAPTER_CONFLICT',
-      message: `mixed clock declarations [${[...declaredClocks].sort().join(', ')}] across the game and its chapters — v1 requires a uniform clock` });
+      message: `mixed clock profiles [${[...clocks].sort().join(', ')}] across the game and its chapters — v1 requires a uniform clock`,
+      where: game.startChapterId });
   }
 
   // reachability from start

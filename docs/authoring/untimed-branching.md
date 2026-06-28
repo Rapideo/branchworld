@@ -30,7 +30,7 @@ export const myGame: Game = {
 
 **State-gated endings** (priority + a default) — set boolean latches or resource values in entry effects, then read them in ending conditions.  Use distinct priorities so the resolution order is explicit and `OVERLAPPING_ENDINGS` warnings are avoided.
 
-**Choice-driven resources** (no `depletion`) — increment / decrement the resource via entry effects on destination nodes; the clock never touches it.  Use `adjust_resource` only for time-driven resources (the lint `ADJUST_RESOURCE_NOT_TIME_DRIVEN` will stop you otherwise).
+**Choice-driven resources** (no `depletion`) — increment / decrement the resource via entry effects on destination nodes; the clock never touches it.  **Do not use `adjust_resource`** — it targets a time-driven resource (one with `depletion`), which untimed games forbid; the lint `ADJUST_RESOURCE_NOT_TIME_DRIVEN` fires on any non-time-driven target.
 
 **Latches in entry effects, not choice effects** — latches read by endings should be set in a destination node's `entryEffects`, not in a choice's `effects`, so the lint `LATCH_IN_CHOICE_EFFECT` stays silent.
 

@@ -51,4 +51,22 @@ describe('The Countinghouse — the wired game', () => {
     const reached = new Set(report.filter((r) => r.reached).map((r) => r.endingId));
     expect(reached.has('end_outfit')).toBe(true); // the carried-low Lead depletes to zero -> the outfit
   });
+
+  it('a careful loud run (relay buy-back, light take, leave the boxman) gets out — Out, Not Whole', () => {
+    const g = new GameRunner(countinghouse);
+    ['c_approach', 'c_loud', 'c_loud_on', 'c_relay_late', 'c_relay_on', 'c_blow', 'c_enough1', 'c_run'].forEach((c) => g.choose(c));
+    expect(g.view().chapterId).toBe('ch2_wayout');
+    expect(g.view().state.vars.alarm_tripped).toBe(true); // the loud latch carried
+    ['c_to_stair', 'c_force', 'c_corridor_on', 'c_leave_hot', 'c_leave_hot_on', 'c_dash', 'c_drive_alone'].forEach((c) => g.choose(c));
+    const v = g.view();
+    expect(v.gameOver).toBe(true);
+    expect(v.finalEndingId).toBe('end_not_whole'); // survived loud — by leaving the boxman
+  });
+
+  it('a greedy loud run (charge, full take, cover the boxman) is taken by The Outfit (Lead pressure)', () => {
+    const g = new GameRunner(countinghouse);
+    ['c_approach', 'c_loud', 'c_loud_on', 'c_charge', 'c_blow', 'c_more1', 'c_more2', 'c_done', 'c_run'].forEach((c) => g.choose(c));
+    ['c_to_stair', 'c_force', 'c_corridor_on', 'c_cover_hot'].forEach((c) => g.choose(c));
+    expect(g.view().finalEndingId).toBe('end_outfit'); // the Lead is gone before the car
+  });
 });

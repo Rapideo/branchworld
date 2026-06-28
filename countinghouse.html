@@ -334,7 +334,7 @@
       this.story = story;
       this.state = initState(story);
       this.currentId = story.startNodeId;
-      this.deadline = parseTime(story.deadline);
+      this.deadline = story.deadline !== void 0 ? parseTime(story.deadline) : Infinity;
       this.startTime = parseTime(story.startTime);
       this.bounds = buildBounds(story);
       this.enter(this.currentId);
@@ -426,6 +426,47 @@
     }
   };
 
+  // src/engine/profile.ts
+  var REC = "use preset TIME_PRESSURE_SURVIVAL (clock:'timed') to keep these, or remove them to stay untimed";
+  var TIME_OPS = /* @__PURE__ */ new Set(["time_before", "time_after", "time_between"]);
+  var CLOCK_READING_OPS = /* @__PURE__ */ new Set(["equals", "not_equals", "gt", "gte", "lt", "lte", "is_true", "is_false", "has_item"]);
+  var readsClock = (c) => TIME_OPS.has(c.op) || c.field === "time" && CLOCK_READING_OPS.has(c.op);
+  function clockReadingHits(story) {
+    var _a;
+    const hits = [];
+    const scan = (cs, where) => {
+      for (const c of cs != null ? cs : []) if (readsClock(c)) hits.push({ op: c.op, where });
+    };
+    for (const n of story.nodes) {
+      scan(n.conditions, `node ${n.id}`);
+      for (const ch of (_a = n.choices) != null ? _a : []) scan(ch.conditions, `choice ${ch.id}`);
+    }
+    for (const ev of story.events) scan(ev.trigger, `event ${ev.id}`);
+    for (const en of story.endings) scan(en.conditions, `ending ${en.id}`);
+    return hits;
+  }
+  var clockDimension = {
+    id: "clock",
+    values: ["timed", "untimed"],
+    default: "timed",
+    validate(story, value) {
+      var _a;
+      const issues = [];
+      if (value === "timed") {
+        if (story.deadline === void 0) issues.push({ code: "PROFILE_TIMED_NEEDS_DEADLINE", message: "profile clock:'timed' requires a deadline" });
+      } else if (value === "untimed") {
+        if (story.deadline !== void 0) issues.push({ code: "PROFILE_UNTIMED_HAS_DEADLINE", message: `clock:'untimed' but the story has a deadline '${story.deadline}' \u2014 ${REC}` });
+        if (story.outOfTimeEndingId) issues.push({ code: "PROFILE_UNTIMED_HAS_OOT_ENDING", message: `clock:'untimed' but outOfTimeEndingId '${story.outOfTimeEndingId}' is set (it can never fire) \u2014 ${REC}`, where: story.outOfTimeEndingId });
+        for (const r of (_a = story.resources) != null ? _a : []) if (r.depletion) issues.push({ code: "PROFILE_UNTIMED_HAS_TIME_RESOURCE", message: `clock:'untimed' but resource '${r.id}' is time-driven (has depletion) \u2014 ${REC}`, where: r.id });
+        for (const h of clockReadingHits(story)) issues.push({ code: "PROFILE_UNTIMED_HAS_TIME_CONDITION", message: `clock:'untimed' but a clock-reading condition (${h.op}) appears in ${h.where} \u2014 ${REC}`, where: h.where });
+      }
+      return issues;
+    }
+  };
+  var DIMENSIONS = [clockDimension];
+  var DEFAULT_PROFILE = Object.fromEntries(DIMENSIONS.map((d) => [d.id, d.default]));
+  var TIME_PRESSURE_SURVIVAL = { clock: "timed" };
+
   // src/container/carry.ts
   function minutesToClock(min) {
     const m = Math.max(0, Math.round(min));
@@ -461,7 +502,7 @@
       ];
       start.entryEffects = [...seedEffects, ...(_b = start.entryEffects) != null ? _b : []];
     }
-    if (gameDeadlineMinutes !== void 0) {
+    if (gameDeadlineMinutes !== void 0 && s.deadline !== void 0) {
       const chapterStart = parseTime(s.startTime);
       const projected = chapterStart + Math.max(0, gameDeadlineMinutes - gameElapsedMinutes);
       const eff = Math.max(chapterStart, Math.min(parseTime(s.deadline), projected));
@@ -679,7 +720,30 @@ You watch the slot of yellow light and you do the arithmetic one more time, the 
         ],
         body: "The freight shutter comes up loud, a long iron complaint that no amount of grease was ever going to soften, and somewhere in the wall a contact you did not have time to find closes a circuit, and the building wakes.\n\nThere is no bell on the floor \u2014 the bell is downtown, on a desk, where a bored man is sitting up straighter now and reaching for a phone. You feel the change in the air the way you feel weather coming. You are in, fast, the way you wanted; but the building knows you are in it now, and the count-crew above has heard the shutter, and the long patient hour you might have had is gone before it started. From here it is a race, and you started it a step behind.\n\nThe boxman is already moving, kit out, no time spent on regret. The box room is ahead, past the tables. Whatever you take, you take fast.",
         choices: [
-          { id: "c_loud_on", label: "On to the box room \u2014 move.", destination: "n_box", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+          { id: "c_loud_on", label: "Onto the floor \u2014 the building\u2019s waking.", destination: "n_floor_loud_react", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_floor_loud_react",
+        title: "The Building Wakes",
+        type: "scene",
+        location: "count_floor",
+        entryEffects: [{ field: "location", op: "change_location", value: "count_floor" }],
+        body: 'You are three steps onto the floor when the building stops pretending. A light comes on somewhere it should not, and overhead the count-crew\u2019s slow even tread changes \u2014 a chair shoved back, a voice gone sharp, the particular quickening of men who have just understood that the noise was not nothing. The alarm did that. The alarm you traded the quiet hour for.\n\nThe boxman has his head cocked, reading the ceiling the way he reads a lock. "They\u2019re coming down," he says, flat, not afraid, just stating the arithmetic. He is right; you can hear it starting, weight on the stair above. You have seconds, not minutes, and two ways to spend them: straight at the box and damn the margin, or a half-minute on the alarm relay you passed on the way in \u2014 cut it late, buy back a corner of the night, and gamble the seconds it costs.',
+        choices: [
+          { id: "c_charge", label: "Straight at the box \u2014 damn the margin.", destination: "n_box", effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "lead", op: "adjust_resource", value: "-8" }] },
+          { id: "c_relay_late", label: "Kill the relay late \u2014 buy back a corner of the night.", destination: "n_floor_relay", effects: [{ field: "time", op: "add_minutes", value: "10" }] }
+        ]
+      },
+      {
+        id: "n_floor_relay",
+        title: "The Relay, Late",
+        type: "scene",
+        location: "count_floor",
+        entryEffects: [{ field: "location", op: "change_location", value: "count_floor" }],
+        body: "You go for the relay box on the wall by the stair-head, where you marked it on the way in and did not have the time to do it right. You do it wrong now, fast, the boxman\u2019s light on the wires and your hands working ahead of your thinking, and the contact comes out of its seat with a small dead click that is the most expensive quiet you have ever bought.\n\nIt does not call the alarm back \u2014 downtown already has it, the bored man already has his phone \u2014 but it kills the bell that was about to start screaming on this floor, and it buys you a corner of the margin back, a thin grey edge of head start you did not have a breath ago. The count-crew is on the stair. You spent the seconds. Now you had better be worth them.",
+        choices: [
+          { id: "c_relay_on", label: "Relay\u2019s dead \u2014 into the box room.", destination: "n_box", effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "lead", op: "adjust_resource", value: "24" }] }
         ]
       },
       // ===== PHASE 3 — THE BOX =====
@@ -750,7 +814,7 @@ You watch the slot of yellow light and you do the arithmetic one more time, the 
           { field: "partner_status", op: "set", value: "frayed" },
           { field: "clues", op: "add_clue", value: "clue_crew_early" }
         ],
-        body: 'You hear the street door before you understand it \u2014 the particular complaint of a hinge you cased for a month and know the voice of \u2014 and then the stairs, more than one man, unhurried, the sound of people who belong here coming back to a place that is theirs.\n\nThe count-crew. Early. Nobody is early in this business; early is a thing that happens to other people, and now it is happening to you, with the box open and the take in your hands and the only door the one the footsteps are climbing toward. The boxman has gone the grey of old putty. "They don\u2019t come back till four," he says \u2014 to you, to the room, to the arithmetic that just stopped being true.\n\nIt does not matter now what was supposed to happen. What matters is the stairs, and the count of them, and how few are left.',
+        body: 'You hear them before you understand them \u2014 the stairs taking weight, more than one man, the unhurried certainty of people who belong here and have just stopped belonging to the part of the night that does not know you are in it.\n\nThe count-crew. The alarm called them, or they only came back early \u2014 nobody comes back early in this business, and yet here they are either way \u2014 and it makes no difference now, with the box open and the take in your hands and the one door you want the one their footsteps are making for. The boxman has gone the grey of old putty. "They\u2019re on the stair," he says, to you, to the room, to the arithmetic that just stopped being true.\n\nIt does not matter now what was supposed to happen. What matters is the stairs, and the count of them, and how few are left.',
         choices: [
           { id: "c_run", label: "The back stair \u2014 go, now, before they top the landing.", destination: "n_commit", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
         ]
@@ -800,6 +864,7 @@ You watch the slot of yellow light and you do the arithmetic one more time, the 
     ],
     locations: [
       { id: "stairwell", name: "The Back Stair" },
+      { id: "corridor", name: "The Service Corridor" },
       { id: "loading_dock", name: "The Loading Dock" },
       { id: "alley", name: "The Alley" },
       { id: "getaway_car", name: "The Car" }
@@ -831,7 +896,7 @@ You watch the slot of yellow light and you do the arithmetic one more time, the 
         body: "At the bottom the stair gives onto a service corridor and, past it, the loading dock and the alley and \u2014 if the night has gone the way you need it to \u2014 the car.\n\nHow you go from here depends on how you came in. If you came clean, the building still half-believes it is empty, and you can move through it quiet and unhurried, the way a man moves who has every right to be where he is. If you came loud, the building knows, and quiet is a luxury you spent at the freight shutter; now it is just speed and nerve and the door at the far end.",
         choices: [
           { id: "c_slip", label: "Slip through quiet \u2014 the building still thinks it\u2019s asleep.", destination: "n_lot", conditions: [{ field: "made_clean", op: "is_true" }], effects: [{ field: "time", op: "add_minutes", value: "10" }, { field: "lead", op: "adjust_resource", value: "10" }] },
-          { id: "c_force", label: "No time for quiet \u2014 force the corridor and run.", destination: "n_lot", conditions: [{ field: "alarm_tripped", op: "is_true" }], effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "lead", op: "adjust_resource", value: "-10" }] }
+          { id: "c_force", label: "No time for quiet \u2014 force the corridor and run.", destination: "n_corridor_loud", conditions: [{ field: "alarm_tripped", op: "is_true" }], effects: [{ field: "time", op: "add_minutes", value: "5" }, { field: "lead", op: "adjust_resource", value: "-8" }] }
         ]
       },
       {
@@ -858,6 +923,43 @@ You watch the slot of yellow light and you do the arithmetic one more time, the 
         body: "You go alone, and you go fast, low and quick along the dock\u2019s edge while the man at the head of it is still working out what his ears told him, and you are past him and into the alley before the boxman has finished understanding what you decided.\n\nYou do not look back. Looking back is for men who can afford it. Behind you, in the concrete dark of the dock, the boxman is on the wrong side of a decision you made in the half-second the night gave you to make it, and that is his now, the particular weight of it, the same way the take is yours. Fifteen years, and it comes down to a corridor and a count of seconds and which of you could move faster. You carry that out into the alley with the rest of what you are carrying.",
         choices: [
           { id: "c_leave_on", label: "Into the alley.", destination: "n_approach_car", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_corridor_loud",
+        title: "The Service Corridor",
+        type: "scene",
+        location: "corridor",
+        entryEffects: [{ field: "location", op: "change_location", value: "corridor" }],
+        body: "The service corridor is a straight cold run of painted block and you take it at a dead sprint, the take banging against your ribs, the alarm a thin electric scream somewhere behind you now and the building coming awake around it floor by floor. Somewhere a phone is ringing and ringing and nobody is answering it, because everybody is doing what you are doing, which is moving.\n\nThe boxman is at your shoulder, breathing hard, keeping up on heart and habit. There is no quiet to spend here, no patience, no hour bought \u2014 there is only the door at the far end and the loading dock past it and the alley past that, and the cold arithmetic of getting through all three before the men behind you do. You hit the dock door with your shoulder and it gives.",
+        choices: [
+          { id: "c_corridor_on", label: "Through the door onto the dock.", destination: "n_dock_hot", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_dock_hot",
+        title: "The Dock, Hot",
+        type: "scene",
+        location: "loading_dock",
+        entryEffects: [{ field: "location", op: "change_location", value: "loading_dock" }],
+        body: "The dock is not empty, and the man in it is not the man your month of arithmetic promised. The crew sent someone down the front the moment the alarm went, and he is here, turned, facing the door you just came through, and the thing in his hand is up and level and pointed at the middle of you before your eyes have finished adjusting to the dark.\n\nNobody says the thing people say in pictures. He is a man who counts money for frightening people, and he knows exactly what the take against your chest is and exactly what the night is worth to the men he works for, and his hand is steady. Between you and the alley is one armed man and a half-second\u2019s decision \u2014 and the boxman is a step behind you, slower, in the open, the easiest thing in the room to hit. You can put yourself between them and bring him through with you, which is slow, and which is a gun. Or you can be the fast thing and the small target, and go, alone, now.",
+        choices: [
+          { id: "c_cover_hot", label: "Get between them \u2014 bring the boxman through.", destination: "n_approach_car", effects: [{ field: "time", op: "add_minutes", value: "15" }, { field: "lead", op: "adjust_resource", value: "-5" }] },
+          { id: "c_leave_hot", label: "Be the small target \u2014 go alone, now.", destination: "n_leave_hot", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
+        ]
+      },
+      {
+        id: "n_leave_hot",
+        title: "Alone, Loud",
+        type: "scene",
+        location: "loading_dock",
+        entryEffects: [
+          { field: "location", op: "change_location", value: "loading_dock" },
+          { field: "partner_status", op: "set", value: "gone" }
+        ],
+        body: "You go. You are the fast thing and the small target and you go low and hard for the alley mouth, and the dock comes apart in noise behind you \u2014 the flat enormous bark of the gun, once, twice, loud enough to take the night and tear it \u2014 and you do not look back, because looking back is a thing that gets the looker killed, and because you already know.\n\nYou make the alley. The boxman does not. Whatever happened in the half-second you spent saving yourself happened to him instead, in the concrete dark of a loading dock, with a gun and a man who counts money and the particular indifference of a building that was never going to let two men out of it tonight. You made the crossing. You did not make it whole. That is yours now, the shape of it, to carry into whatever grey is left.",
+        choices: [
+          { id: "c_leave_hot_on", label: "Into the alley, alone.", destination: "n_approach_car", effects: [{ field: "time", op: "add_minutes", value: "5" }] }
         ]
       },
       {
@@ -988,6 +1090,7 @@ You watch the slot of yellow light and you do the arithmetic one more time, the 
     id: "countinghouse",
     title: "The Countinghouse",
     startChapterId: "ch1_wayin",
+    profile: TIME_PRESSURE_SURVIVAL,
     carry: { vars: "all", resources: ["lead"], clues: true, inventory: true },
     gameDeadlineMinutes: 240,
     domains: { partner_status: ["steady", "frayed", "hurt", "gone"] },

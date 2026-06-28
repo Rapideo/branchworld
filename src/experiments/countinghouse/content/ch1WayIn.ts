@@ -157,7 +157,7 @@ export const ch1WayIn: Story = {
         'You go for the relay box on the wall by the stair-head, where you marked it on the way in and did not have the time to do it right. You do it wrong now, fast, the boxman’s light on the wires and your hands working ahead of your thinking, and the contact comes out of its seat with a small dead click that is the most expensive quiet you have ever bought.\n\n' +
         'It does not call the alarm back — downtown already has it, the bored man already has his phone — but it kills the bell that was about to start screaming on this floor, and it buys you a corner of the margin back, a thin grey edge of head start you did not have a breath ago. The count-crew is on the stair. You spent the seconds. Now you had better be worth them.',
       choices: [
-        { id: 'c_relay_on', label: 'Relay’s dead — into the box room.', destination: 'n_box', effects: [{ field: 'time', op: 'add_minutes', value: '5' }, { field: 'lead', op: 'adjust_resource', value: '12' }] },
+        { id: 'c_relay_on', label: 'Relay’s dead — into the box room.', destination: 'n_box', effects: [{ field: 'time', op: 'add_minutes', value: '5' }, { field: 'lead', op: 'adjust_resource', value: '24' }] },
       ],
     },
     // ===== PHASE 3 — THE BOX =====

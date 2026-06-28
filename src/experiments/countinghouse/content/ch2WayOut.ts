@@ -79,7 +79,7 @@ export const ch2WayOut: Story = {
         'How you go from here depends on how you came in. If you came clean, the building still half-believes it is empty, and you can move through it quiet and unhurried, the way a man moves who has every right to be where he is. If you came loud, the building knows, and quiet is a luxury you spent at the freight shutter; now it is just speed and nerve and the door at the far end.',
       choices: [
         { id: 'c_slip', label: 'Slip through quiet — the building still thinks it’s asleep.', destination: 'n_lot', conditions: [{ field: 'made_clean', op: 'is_true' }], effects: [{ field: 'time', op: 'add_minutes', value: '10' }, { field: 'lead', op: 'adjust_resource', value: '10' }] },
-        { id: 'c_force', label: 'No time for quiet — force the corridor and run.', destination: 'n_corridor_loud', conditions: [{ field: 'alarm_tripped', op: 'is_true' }], effects: [{ field: 'time', op: 'add_minutes', value: '5' }, { field: 'lead', op: 'adjust_resource', value: '-10' }] },
+        { id: 'c_force', label: 'No time for quiet — force the corridor and run.', destination: 'n_corridor_loud', conditions: [{ field: 'alarm_tripped', op: 'is_true' }], effects: [{ field: 'time', op: 'add_minutes', value: '5' }, { field: 'lead', op: 'adjust_resource', value: '-8' }] },
       ],
     },
     {

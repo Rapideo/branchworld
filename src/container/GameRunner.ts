@@ -1,4 +1,4 @@
-import { GameEngine, parseTime } from '../../engine';
+import { GameEngine, parseTime } from '../engine';
 import type { Game, Chapter, CarriedState, GameSnapshot, GameRunnerView } from './types';
 import { extractCarry, seedChapterStory } from './carry';
 import { pickNextChapter } from './transitions';

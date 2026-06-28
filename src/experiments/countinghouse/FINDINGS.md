@@ -47,15 +47,15 @@ earlier (endsWith → getaways; atZero → Outfit; deadline → Dawn), so the de
 structural orphan with neutral prose (it never advertises an outcome a player can reach). A live "cornered
 inside" branch that fires it is deferred to the loud-route expansion.
 
-## DO NEXT — promote the container
+## Container promoted (DONE)
 
-The container layer (`Game`/`GameRunner`/`lintGame`/`lintGameContracts`/`seededWalk`/`carry`/`transitions`)
-physically lives in `src/experiments/sump-line/` but is **game-agnostic**. This slice imports it by submodule
-(`../../sump-line/GameRunner`, etc.) — deliberately **not** the barrel, which re-exports the cave *game*.
-
-Two consumers now exist (the cave + the heist), so the shared shape is visible. **The immediate next refactor**
-is to promote the container to a shared `src/container/` (move the container modules, leave the cave content
-behind, repoint both games' imports, keep the suite green) — before a third consumer entrenches the coupling.
+The container layer (`Game`/`GameRunner`/`lintGame`/`lintGameContracts`/`seededWalk`/`carry`/`transitions`
++ the synthetic `exampleGame` test fixture) has been **promoted to a shared `src/container/`** with its own
+barrel — it is now game-agnostic (depends only on `src/engine/` and its synthetic fixture). The two
+cave-specific integration tests (`lintGameContracts.test` against `sumpLine`, `seededWalk.test` against the
+cave chapters) live with their fixtures in `sump-line/`, not in the container. The cave's `sump-line/index.ts`
+re-exports the container barrel so the cave's own `from '..'` imports are unchanged; the heist imports from
+`../../../container`. Both games' playable builds re-bundle cleanly. 305 tests green.
 
 ## Deferred (not gold-plated into the slice)
 

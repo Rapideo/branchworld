@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { extractCarry, seedChapterStory, minutesToClock } from './carry';
-import type { Story, WorldState } from '../../engine';
+import type { Story, WorldState } from '../engine';
 import type { CarryContract } from './types';
 
 const state: WorldState = {

@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lintGame } from '../../sump-line/lintGame';
-import { GameRunner } from '../../sump-line/GameRunner';
-import { valuesAtEndings } from '../../sump-line/seededWalk';
+import { lintGame, GameRunner, valuesAtEndings } from '../../../container';
 import { countinghouse } from './countinghouse';
 import { ch2WayOut } from './ch2WayOut';
 

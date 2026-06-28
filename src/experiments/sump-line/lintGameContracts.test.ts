@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { Game } from './types';
+import { lintGameContracts, deriveLedger, lintGame, type Game } from '../../container';
 import { sumpLine } from './content/sumpLine';
-import { lintGameContracts, deriveLedger } from './lintGameContracts';
-import { lintGame } from './lintGame';
 
 const clone = (): Game => JSON.parse(JSON.stringify(sumpLine)) as Game;
 const chapter = (g: Game, id: string) => g.chapters.find((c) => c.id === id)!;

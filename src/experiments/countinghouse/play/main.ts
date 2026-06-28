@@ -1,5 +1,4 @@
-import { GameRunner } from '../../sump-line/GameRunner';
-import type { GameRunnerView } from '../../sump-line/types';
+import { GameRunner, type GameRunnerView } from '../../../container';
 import { countinghouse } from '../content/countinghouse';
 
 /** Replace the engine's {{time}} token with the rendered chapter clock (pure; unit-tested). */

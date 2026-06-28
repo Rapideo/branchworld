@@ -1,4 +1,4 @@
-import type { Story } from '../../engine';
+import type { Story } from '../engine';
 import type { Game } from './types';
 
 // Chapter 1: warmth starts at 4 and depletes 1 per 30 min. "slow" burns more warmth than "fast".

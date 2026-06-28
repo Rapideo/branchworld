@@ -13,9 +13,9 @@
  * of the Story's variable defaults / resource starts — the same move the container's seedChapterStory
  * makes. No src/engine change.
  */
-import { GameEngine } from '../../engine';
-import type { Story, Primitive, GameView, EngineSnapshot } from '../../engine';
-import { walkStateSpace, type WalkReport } from '../../engine/stateSpaceWalk';
+import { GameEngine } from '../engine';
+import type { Story, Primitive, GameView, EngineSnapshot } from '../engine';
+import { walkStateSpace, type WalkReport } from '../engine/stateSpaceWalk';
 
 /** Clone the Story and override variable defaults / resource starts from a representative carried-in state. */
 export function seedStory(story: Story, seed: Record<string, Primitive>): Story {

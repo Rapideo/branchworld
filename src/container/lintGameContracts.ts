@@ -16,7 +16,7 @@
  *
  * See docs/a1-contract-linter-design.md.
  */
-import type { Story, Condition, Effect, LintIssue, Primitive } from '../../engine';
+import type { Story, Condition, Effect, LintIssue, Primitive } from '../engine';
 import type { Game } from './types';
 
 const VAR_READ_OPS = new Set(['equals', 'not_equals', 'gt', 'gte', 'lt', 'lte', 'is_true', 'is_false']);

@@ -14,7 +14,7 @@
  * the test. Heavier sweep: FUZZ_N=5000 npx vitest run src/experiments/countinghouse/harden
  */
 import { describe, it, expect } from 'vitest';
-import { GameRunner } from '../../sump-line/GameRunner';
+import { GameRunner } from '../../../container';
 import { countinghouse } from '../content/countinghouse';
 
 function mulberry32(seed: number): () => number {

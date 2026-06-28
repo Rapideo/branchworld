@@ -21,14 +21,15 @@ code.
 - ✅ **ch1 "The Way In"** (`5478d89`) — counted inventory + The Lead (`adjust_resource`).
 - ✅ **ch2 "The Way Out"** (`27ac26d`) — `endsWith` finales + Dawn (`outOfTimeEndingId`) + The Outfit (atZero).
 - ✅ **The Game + contracts** (`0ea06ff`) — `countinghouse` wired; `lintGame` clean; carry verified; end-to-end.
-- ⏳ **Hardening + docs + playable harness** (Task 4–5 in progress) — 600-run coherence fuzz green; FINDINGS.md
-  written; this update; then the self-contained playable `countinghouse.html`.
+- ✅ **Hardening + docs + playable harness** (`8a9db1c`/`2201038`) — 600-run coherence fuzz; FINDINGS.md;
+  self-contained playable `countinghouse.html`. **Slice MERGED to `master`** (merge `aaa2281`).
+- ✅ **Container promoted to `src/container/`** (`eb94b3b`, branch `refactor/promote-container`) — the
+  multi-chapter container is now a shared, game-agnostic layer (was inside `sump-line/`); both games repoint;
+  305 tests green. (The flagged DO-NEXT, done.)
 - **Zero engine change throughout. Nothing pushed.**
 
-**NEXT (Matthew's call):** finish the slice (the playable build), then one of —
-(a) **promote the container** to a shared `src/container/` (two consumers now; see `countinghouse/FINDINGS.md` —
-the recommended immediate refactor); (b) **expand the heist** (the loud route, then the remaining two chapters);
-(c) the **next capability** (characters-as-assets / timed challenges / clock-phase profile); (d) the **WS-G
+**NEXT (Matthew's call):** (a) **expand the heist** (the loud route, then the remaining two chapters); (b) the
+**next capability** (characters-as-assets / timed challenges / clock-phase profile); (c) the **WS-G
 front-end**. Deferred P2 engine lints (F8/F9/F10) remain clean on shipped content.
 
 ## Status — 2026-06-26 (engine v1.4 wrap-up IN PROGRESS) — resume anchor

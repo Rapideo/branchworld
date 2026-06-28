@@ -1,5 +1,5 @@
-import { evaluateConditions } from '../../engine';
-import type { WorldState } from '../../engine';
+import { evaluateConditions } from '../engine';
+import type { WorldState } from '../engine';
 import type { Chapter } from './types';
 
 export function pickNextChapter(chapter: Chapter, finalState: WorldState, endingId: string): string | undefined {

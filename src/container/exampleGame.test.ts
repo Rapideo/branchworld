@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lintStory } from '../../engine';
+import { lintStory } from '../engine';
 import { exampleGame } from './exampleGame';
 
 describe('exampleGame', () => {

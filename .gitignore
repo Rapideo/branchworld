@@ -9,3 +9,6 @@ coverage/
 # Agent working directory (Claude Code) — local state only; the authoring skill is tracked
 .claude/*
 !.claude/skills/
+
+# Subagent-driven-development scratch (ledger, briefs, review diffs) — local only
+.superpowers/

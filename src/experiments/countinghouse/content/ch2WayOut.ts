@@ -43,6 +43,7 @@ export const ch2WayOut: Story = {
   ],
   locations: [
     { id: 'stairwell', name: 'The Back Stair' },
+    { id: 'corridor', name: 'The Service Corridor' },
     { id: 'loading_dock', name: 'The Loading Dock' },
     { id: 'alley', name: 'The Alley' },
     { id: 'getaway_car', name: 'The Car' },
@@ -78,7 +79,7 @@ export const ch2WayOut: Story = {
         'How you go from here depends on how you came in. If you came clean, the building still half-believes it is empty, and you can move through it quiet and unhurried, the way a man moves who has every right to be where he is. If you came loud, the building knows, and quiet is a luxury you spent at the freight shutter; now it is just speed and nerve and the door at the far end.',
       choices: [
         { id: 'c_slip', label: 'Slip through quiet — the building still thinks it’s asleep.', destination: 'n_lot', conditions: [{ field: 'made_clean', op: 'is_true' }], effects: [{ field: 'time', op: 'add_minutes', value: '10' }, { field: 'lead', op: 'adjust_resource', value: '10' }] },
-        { id: 'c_force', label: 'No time for quiet — force the corridor and run.', destination: 'n_lot', conditions: [{ field: 'alarm_tripped', op: 'is_true' }], effects: [{ field: 'time', op: 'add_minutes', value: '5' }, { field: 'lead', op: 'adjust_resource', value: '-10' }] },
+        { id: 'c_force', label: 'No time for quiet — force the corridor and run.', destination: 'n_corridor_loud', conditions: [{ field: 'alarm_tripped', op: 'is_true' }], effects: [{ field: 'time', op: 'add_minutes', value: '5' }, { field: 'lead', op: 'adjust_resource', value: '-8' }] },
       ],
     },
     {
@@ -109,6 +110,49 @@ export const ch2WayOut: Story = {
         'You do not look back. Looking back is for men who can afford it. Behind you, in the concrete dark of the dock, the boxman is on the wrong side of a decision you made in the half-second the night gave you to make it, and that is his now, the particular weight of it, the same way the take is yours. Fifteen years, and it comes down to a corridor and a count of seconds and which of you could move faster. You carry that out into the alley with the rest of what you are carrying.',
       choices: [
         { id: 'c_leave_on', label: 'Into the alley.', destination: 'n_approach_car', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] },
+      ],
+    },
+    {
+      id: 'n_corridor_loud',
+      title: 'The Service Corridor',
+      type: 'scene',
+      location: 'corridor',
+      entryEffects: [{ field: 'location', op: 'change_location', value: 'corridor' }],
+      body:
+        'The service corridor is a straight cold run of painted block and you take it at a dead sprint, the take banging against your ribs, the alarm a thin electric scream somewhere behind you now and the building coming awake around it floor by floor. Somewhere a phone is ringing and ringing and nobody is answering it, because everybody is doing what you are doing, which is moving.\n\n' +
+        'The boxman is at your shoulder, breathing hard, keeping up on heart and habit. There is no quiet to spend here, no patience, no hour bought — there is only the door at the far end and the loading dock past it and the alley past that, and the cold arithmetic of getting through all three before the men behind you do. You hit the dock door with your shoulder and it gives.',
+      choices: [
+        { id: 'c_corridor_on', label: 'Through the door onto the dock.', destination: 'n_dock_hot', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] },
+      ],
+    },
+    {
+      id: 'n_dock_hot',
+      title: 'The Dock, Hot',
+      type: 'scene',
+      location: 'loading_dock',
+      entryEffects: [{ field: 'location', op: 'change_location', value: 'loading_dock' }],
+      body:
+        'The dock is not empty, and the man in it is not the man your month of arithmetic promised. The crew sent someone down the front the moment the alarm went, and he is here, turned, facing the door you just came through, and the thing in his hand is up and level and pointed at the middle of you before your eyes have finished adjusting to the dark.\n\n' +
+        'Nobody says the thing people say in pictures. He is a man who counts money for frightening people, and he knows exactly what the take against your chest is and exactly what the night is worth to the men he works for, and his hand is steady. Between you and the alley is one armed man and a half-second’s decision — and the boxman is a step behind you, slower, in the open, the easiest thing in the room to hit. You can put yourself between them and bring him through with you, which is slow, and which is a gun. Or you can be the fast thing and the small target, and go, alone, now.',
+      choices: [
+        { id: 'c_cover_hot', label: 'Get between them — bring the boxman through.', destination: 'n_approach_car', effects: [{ field: 'time', op: 'add_minutes', value: '15' }, { field: 'lead', op: 'adjust_resource', value: '-5' }] },
+        { id: 'c_leave_hot', label: 'Be the small target — go alone, now.', destination: 'n_leave_hot', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] },
+      ],
+    },
+    {
+      id: 'n_leave_hot',
+      title: 'Alone, Loud',
+      type: 'scene',
+      location: 'loading_dock',
+      entryEffects: [
+        { field: 'location', op: 'change_location', value: 'loading_dock' },
+        { field: 'partner_status', op: 'set', value: 'gone' },
+      ],
+      body:
+        'You go. You are the fast thing and the small target and you go low and hard for the alley mouth, and the dock comes apart in noise behind you — the flat enormous bark of the gun, once, twice, loud enough to take the night and tear it — and you do not look back, because looking back is a thing that gets the looker killed, and because you already know.\n\n' +
+        'You make the alley. The boxman does not. Whatever happened in the half-second you spent saving yourself happened to him instead, in the concrete dark of a loading dock, with a gun and a man who counts money and the particular indifference of a building that was never going to let two men out of it tonight. You made the crossing. You did not make it whole. That is yours now, the shape of it, to carry into whatever grey is left.',
+      choices: [
+        { id: 'c_leave_hot_on', label: 'Into the alley, alone.', destination: 'n_approach_car', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] },
       ],
     },
     {

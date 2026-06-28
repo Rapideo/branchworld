@@ -130,7 +130,34 @@ export const ch1WayIn: Story = {
         'There is no bell on the floor — the bell is downtown, on a desk, where a bored man is sitting up straighter now and reaching for a phone. You feel the change in the air the way you feel weather coming. You are in, fast, the way you wanted; but the building knows you are in it now, and the count-crew above has heard the shutter, and the long patient hour you might have had is gone before it started. From here it is a race, and you started it a step behind.\n\n' +
         'The boxman is already moving, kit out, no time spent on regret. The box room is ahead, past the tables. Whatever you take, you take fast.',
       choices: [
-        { id: 'c_loud_on', label: 'On to the box room — move.', destination: 'n_box', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] },
+        { id: 'c_loud_on', label: 'Onto the floor — the building’s waking.', destination: 'n_floor_loud_react', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] },
+      ],
+    },
+    {
+      id: 'n_floor_loud_react',
+      title: 'The Building Wakes',
+      type: 'scene',
+      location: 'count_floor',
+      entryEffects: [{ field: 'location', op: 'change_location', value: 'count_floor' }],
+      body:
+        'You are three steps onto the floor when the building stops pretending. A light comes on somewhere it should not, and overhead the count-crew’s slow even tread changes — a chair shoved back, a voice gone sharp, the particular quickening of men who have just understood that the noise was not nothing. The alarm did that. The alarm you traded the quiet hour for.\n\n' +
+        'The boxman has his head cocked, reading the ceiling the way he reads a lock. "They’re coming down," he says, flat, not afraid, just stating the arithmetic. He is right; you can hear it starting, weight on the stair above. You have seconds, not minutes, and two ways to spend them: straight at the box and damn the margin, or a half-minute on the alarm relay you passed on the way in — cut it late, buy back a corner of the night, and gamble the seconds it costs.',
+      choices: [
+        { id: 'c_charge', label: 'Straight at the box — damn the margin.', destination: 'n_box', effects: [{ field: 'time', op: 'add_minutes', value: '5' }, { field: 'lead', op: 'adjust_resource', value: '-8' }] },
+        { id: 'c_relay_late', label: 'Kill the relay late — buy back a corner of the night.', destination: 'n_floor_relay', effects: [{ field: 'time', op: 'add_minutes', value: '10' }] },
+      ],
+    },
+    {
+      id: 'n_floor_relay',
+      title: 'The Relay, Late',
+      type: 'scene',
+      location: 'count_floor',
+      entryEffects: [{ field: 'location', op: 'change_location', value: 'count_floor' }],
+      body:
+        'You go for the relay box on the wall by the stair-head, where you marked it on the way in and did not have the time to do it right. You do it wrong now, fast, the boxman’s light on the wires and your hands working ahead of your thinking, and the contact comes out of its seat with a small dead click that is the most expensive quiet you have ever bought.\n\n' +
+        'It does not call the alarm back — downtown already has it, the bored man already has his phone — but it kills the bell that was about to start screaming on this floor, and it buys you a corner of the margin back, a thin grey edge of head start you did not have a breath ago. The count-crew is on the stair. You spent the seconds. Now you had better be worth them.',
+      choices: [
+        { id: 'c_relay_on', label: 'Relay’s dead — into the box room.', destination: 'n_box', effects: [{ field: 'time', op: 'add_minutes', value: '5' }, { field: 'lead', op: 'adjust_resource', value: '24' }] },
       ],
     },
     // ===== PHASE 3 — THE BOX =====
@@ -210,8 +237,8 @@ export const ch1WayIn: Story = {
         { field: 'clues', op: 'add_clue', value: 'clue_crew_early' },
       ],
       body:
-        'You hear the street door before you understand it — the particular complaint of a hinge you cased for a month and know the voice of — and then the stairs, more than one man, unhurried, the sound of people who belong here coming back to a place that is theirs.\n\n' +
-        'The count-crew. Early. Nobody is early in this business; early is a thing that happens to other people, and now it is happening to you, with the box open and the take in your hands and the only door the one the footsteps are climbing toward. The boxman has gone the grey of old putty. "They don’t come back till four," he says — to you, to the room, to the arithmetic that just stopped being true.\n\n' +
+        'You hear them before you understand them — the stairs taking weight, more than one man, the unhurried certainty of people who belong here and have just stopped belonging to the part of the night that does not know you are in it.\n\n' +
+        'The count-crew. The alarm called them, or they only came back early — nobody comes back early in this business, and yet here they are either way — and it makes no difference now, with the box open and the take in your hands and the one door you want the one their footsteps are making for. The boxman has gone the grey of old putty. "They’re on the stair," he says, to you, to the room, to the arithmetic that just stopped being true.\n\n' +
         'It does not matter now what was supposed to happen. What matters is the stairs, and the count of them, and how few are left.',
       choices: [
         { id: 'c_run', label: 'The back stair — go, now, before they top the landing.', destination: 'n_commit', effects: [{ field: 'time', op: 'add_minutes', value: '5' }] },

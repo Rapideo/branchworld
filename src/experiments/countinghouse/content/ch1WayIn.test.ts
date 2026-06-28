@@ -48,3 +48,30 @@ describe('ch1_wayin — The Way In', () => {
     expect(loud.view().state.vars.made_clean).toBe(false);
   });
 });
+
+describe('ch1_wayin — the loud Floor', () => {
+  it('still lints clean and walks with no softlocks after the loud expansion', () => {
+    const r = walkStateSpace(ch1WayIn, { cap: 80000 });
+    expect(lintStory(ch1WayIn).errors).toEqual([]);
+    expect(r.capHit).toBe(false);
+    expect(r.softlocks).toEqual([]);
+  });
+  it('the loud Floor reconverges at the box and spends Lead on the charge', () => {
+    const loud = new GameEngine(ch1WayIn); loud.start();
+    ['c_approach', 'c_loud', 'c_loud_on'].forEach((c) => loud.choose(c)); // -> n_floor_loud_react
+    expect(loud.view().node.id).toBe('n_floor_loud_react');
+    const afterCharge = loud.choose('c_charge'); // -> n_box
+    expect(afterCharge.node.id).toBe('n_box');
+    // the loud-charge run holds LESS Lead than the quiet relay-cut run at the box
+    const quiet = new GameEngine(ch1WayIn); quiet.start();
+    ['c_approach', 'c_quiet', 'c_quiet_on'].forEach((c) => quiet.choose(c)); // quiet -> n_box (buys +10)
+    expect(Number(afterCharge.state.vars.lead)).toBeLessThan(Number(quiet.view().state.vars.lead));
+  });
+  it('the relay-late beat buys Lead back relative to the charge', () => {
+    const charge = new GameEngine(ch1WayIn); charge.start();
+    ['c_approach', 'c_loud', 'c_loud_on', 'c_charge'].forEach((c) => charge.choose(c));
+    const relay = new GameEngine(ch1WayIn); relay.start();
+    ['c_approach', 'c_loud', 'c_loud_on', 'c_relay_late', 'c_relay_on'].forEach((c) => relay.choose(c));
+    expect(Number(relay.view().state.vars.lead)).toBeGreaterThan(Number(charge.view().state.vars.lead));
+  });
+});

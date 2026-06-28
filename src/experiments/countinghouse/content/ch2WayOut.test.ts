@@ -45,3 +45,40 @@ describe('ch2_wayout — The Way Out', () => {
     expect(g.view().endingReached?.id).toBe('end_outfit');
   });
 });
+
+describe('ch2_wayout — the hot-dock loud escape', () => {
+  it('still lints clean and walks with no new softlocks; allowed orphans unchanged', () => {
+    const r = walkStateSpace(ch2WayOut, { cap: 80000 });
+    expect(lintStory(ch2WayOut).errors).toEqual([]);
+    expect(r.softlocks).toEqual([]);
+    const allowed = new Set(['end_outfit', 'end_clean', 'end_still_inside']);
+    expect(r.orphanEndings.filter((e) => !allowed.has(e))).toEqual([]);
+  });
+  it('the loud escape routes through the hot dock; covering keeps the partner', () => {
+    const s: typeof ch2WayOut = JSON.parse(JSON.stringify(ch2WayOut));
+    s.variables.find((v) => v.name === 'alarm_tripped')!.default = true;
+    s.variables.find((v) => v.name === 'made_clean')!.default = false;
+    s.variables.find((v) => v.name === 'partner_status')!.default = 'frayed';
+    s.variables.find((v) => v.name === 'loot')!.default = 3;
+    s.resources!.find((r) => r.id === 'lead')!.start = 40;
+    const g = new GameEngine(s); g.start();
+    g.choose('c_to_stair'); g.choose('c_force');
+    expect(g.view().node.id).toBe('n_corridor_loud');
+    g.choose('c_corridor_on');
+    expect(g.view().node.id).toBe('n_dock_hot');
+    g.choose('c_cover_hot'); g.choose('c_dash');
+    const v = g.choose('c_drive_clean');
+    expect(v.endingReached?.id).toBe('end_clean'); // partner kept, full take
+  });
+  it('leaving the boxman at the hot dock sets partner gone -> Out, Not Whole', () => {
+    const s: typeof ch2WayOut = JSON.parse(JSON.stringify(ch2WayOut));
+    s.variables.find((v) => v.name === 'alarm_tripped')!.default = true;
+    s.variables.find((v) => v.name === 'made_clean')!.default = false;
+    s.resources!.find((r) => r.id === 'lead')!.start = 40;
+    const g = new GameEngine(s); g.start();
+    ['c_to_stair', 'c_force', 'c_corridor_on', 'c_leave_hot', 'c_leave_hot_on', 'c_dash'].forEach((c) => g.choose(c));
+    expect(g.view().state.vars.partner_status).toBe('gone');
+    const v = g.choose('c_drive_alone');
+    expect(v.endingReached?.id).toBe('end_not_whole');
+  });
+});

@@ -426,7 +426,7 @@
     }
   };
 
-  // src/experiments/sump-line/carry.ts
+  // src/container/carry.ts
   function minutesToClock(min) {
     const m = Math.max(0, Math.round(min));
     const hh = Math.floor(m / 60);
@@ -470,7 +470,7 @@
     return s;
   }
 
-  // src/experiments/sump-line/transitions.ts
+  // src/container/transitions.ts
   function pickNextChapter(chapter, finalState, endingId) {
     for (const t of chapter.transitions) {
       if (t.when.endingId !== void 0 && t.when.endingId !== endingId) continue;
@@ -480,7 +480,7 @@
     return void 0;
   }
 
-  // src/experiments/sump-line/GameRunner.ts
+  // src/container/GameRunner.ts
   var EMPTY_CARRY = { vars: {}, clues: [], inventory: [] };
   var MAX_TRANSITIONS = 1e3;
   var GameRunner = class {

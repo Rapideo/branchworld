@@ -158,7 +158,8 @@ for the project at hand (resources, scheduled events, multi-chapter carry, etc.)
 
 | Item | What | Size | Proposed priority |
 |---|---|---|---|
-| D1 | Define the toggle surface (which primitives are opt-in per `Story`/`Game`) and the lint profile per toggle. A small design spike, then implementation. | M | P1 |
+| D1 | Define the toggle surface (which primitives are opt-in per `Story`/`Game`) and the lint profile per toggle. A small design spike, then implementation. **NOW IN DESIGN** (2026-06-28 brainstorm — the profile framework + compatible-sets + clock-model dimension; spec forthcoming under `docs/superpowers/specs/`). | M | P1 |
+| D2 | **Prototype game corpus** (Matthew, 2026-06-28) — build **10–20 small "prototype" games** that each use a different combination of engine features / a different compatible set (timed survival, untimed branching, investigation, free-travel, long-horizon, etc.). Purpose: empirically prove the profile/compatible-sets framework, surface incompatibilities the validator must catch, and let the strongest combos graduate into shipped **presets** + their authoring guides. Sequenced *after* the profile framework (D1) lands so each prototype declares a real profile. | M–L | P2 |
 
 ### WS-E — Tooling for book scale
 *Goal: the tools the method's backlog named, now re-ranked by the hardening pass. (Several overlap WS-A.)*

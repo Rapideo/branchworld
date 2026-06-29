@@ -12,3 +12,4 @@ export * from './lintGame';
 export * from './lintGameContracts';
 export * from './seededWalk';
 export { exampleGame } from './exampleGame';
+export { roamExample, roamExampleTimed, roamStranded } from './roamExample';

@@ -18,7 +18,7 @@ const TIME_OPS = new Set(['time_before', 'time_after', 'time_between']);
 const CLOCK_READING_OPS = new Set(['equals', 'not_equals', 'gt', 'gte', 'lt', 'lte', 'is_true', 'is_false', 'has_item']);
 // A condition reads the live clock if it uses a time_* op OR reads the reserved 'time' field with any value op
 // (the engine resolves field:'time' to state.time for every value-reading op — see conditions.ts/state.ts).
-const readsClock = (c: Condition) => TIME_OPS.has(c.op) || (c.field === 'time' && CLOCK_READING_OPS.has(c.op));
+export const readsClock = (c: Condition) => TIME_OPS.has(c.op) || (c.field === 'time' && CLOCK_READING_OPS.has(c.op));
 
 function clockReadingHits(story: Story): { op: string; where: string }[] {
   const hits: { op: string; where: string }[] = [];
@@ -52,7 +52,16 @@ export const clockDimension: Dimension = {
   },
 };
 
-const DIMENSIONS: Dimension[] = [clockDimension];
+export const travelDimension: Dimension = {
+  id: 'travel',
+  values: ['off', 'free'],
+  default: 'off',
+  // Travel's lints (structural + roam-precondition, mixed error/warning levels) live in travelLint.ts,
+  // called from lintStory — the Dimension.validate→ProfileIssue hook is error-only and lacks lint context.
+  validate: () => [],
+};
+
+const DIMENSIONS: Dimension[] = [clockDimension, travelDimension];
 
 // Derived from the dimensions' defaults so it can never drift from them.
 export const DEFAULT_PROFILE: Profile = Object.fromEntries(DIMENSIONS.map((d) => [d.id, d.default])) as unknown as Profile;
@@ -66,8 +75,9 @@ export function resolveProfile(story: Story, inherited?: Profile): Profile {
 export function validateProfile(story: Story, inherited?: Profile): ProfileIssue[] {
   const profile = resolveProfile(story, inherited);
   const issues: ProfileIssue[] = [];
-  for (const dim of DIMENSIONS) issues.push(...dim.validate(story, profile[dim.id]));
-  // cross-dimension incompatiblePairs — empty in v1 (only one dimension); the hook lands with dimension #2.
+  for (const dim of DIMENSIONS) issues.push(...dim.validate(story, profile[dim.id] ?? dim.default));
+  // cross-dimension incompatiblePairs — empty in v1. Reframed (travel spec rev 2): dimensions carry per-dimension
+  // REQUIREMENTS, not binary forbids; the forbid hook is gated on the D2 corpus (kept only if a real forbid appears).
   return issues;
 }
 

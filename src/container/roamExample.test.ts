@@ -13,6 +13,10 @@ describe('roam reference game', () => {
     expect(lintStory(roamExample.chapters[0].story).errors).toEqual([]);
   });
 
+  it('the timed reference game lints clean', () => {
+    expect(lintStory(roamExampleTimed.chapters[0].story).errors).toEqual([]);
+  });
+
   it('the untimed roam walk terminates, verifies, and has no dead regions', () => {
     const { ok, report } = verifyRoam(roamExample.chapters[0].story);
     expect(report.capHit).toBe(false);

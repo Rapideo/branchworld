@@ -44,4 +44,39 @@ describe('engine travel wiring', () => {
     const eng = new GameEngine(roamStory());
     expect(() => eng.choose('__travel_zzz')).toThrowError(/not connected/);
   });
+
+  it('a ScheduledEvent fires present when the player roams into its eventLocation', () => {
+    const evStory: Story = {
+      id: 'ev_roam', title: 'Event Roam', startNodeId: 'a_hub', startTime: '00:00', startLocation: 'a',
+      profile: { clock: 'untimed', travel: 'free' },
+      variables: [], resources: [],
+      locations: [
+        { id: 'a', name: 'A', connectedLocations: ['b'], travelTimes: { b: 10 }, defaultNode: 'a_hub' },
+        { id: 'b', name: 'B', connectedLocations: ['a'], travelTimes: { a: 10 }, defaultNode: 'b_hub' },
+      ],
+      nodes: [
+        { id: 'a_hub', title: 'A Hub', body: '', choices: [] },
+        { id: 'b_hub', title: 'B Hub', body: '', choices: [] },
+        { id: 'b_scene', title: 'B Scene', body: '', choices: [], resolvesEnding: true },
+      ],
+      endings: [{ id: 'fin', name: 'Fin', conditions: [], isDefault: true, summary: '' }],
+      events: [{
+        id: 'ev_b',
+        title: 'Arrival at B',
+        // time_after '00:10' → satisfied when time ≥ 10; trip A→B costs exactly 10 min
+        trigger: [{ field: 'time', op: 'time_after', value: '00:10' }],
+        eventLocation: 'b',
+        ifPresentNode: 'b_scene',
+        ifAbsentEffects: [],
+        recoveryNodeId: 'b_hub',
+      }],
+    };
+    const eng = new GameEngine(evStory);
+    // At start: time=0, trigger not yet satisfied — event does not fire
+    expect(eng.view().state.completedEvents).toEqual([]);
+    // Roam A→B: engine pays 10 min, sets location='b', then enter(b_hub) fires checkScheduledEvents
+    const v1 = eng.choose('__travel_b');
+    expect(v1.state.completedEvents).toContain('ev_b');  // event fired on arrival
+    expect(v1.node.id).toBe('b_scene');                  // engine routed to ifPresentNode
+  });
 });

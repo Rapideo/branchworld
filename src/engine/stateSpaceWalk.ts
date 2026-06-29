@@ -138,9 +138,13 @@ function walk(story: Story, cap: number, timeBucket?: number, roamOpt?: boolean)
       // block below. Every taken edge (including to an already-visited state) must be recorded; a re-visit edge
       // can be the only route from a state to a terminal. Moving this inside the visited-guard reintroduces the
       // spanning-tree bug the spec was rewritten to fix. (Reviewer: verify this placement explicitly.)
-      const set = edges.get(curKey) ?? new Set<string>();
-      set.add(nextKey);
-      edges.set(curKey, set);
+      // Edge set is consumed only by computeDeadRegions, which walkStateSpace calls only under roam — skip the
+      // build entirely for non-roam walks (pure optimization, no behavior change).
+      if (roam) {
+        const set = edges.get(curKey) ?? new Set<string>();
+        set.add(nextKey);
+        edges.set(curKey, set);
+      }
       if (!visited.has(nextKey)) {
         visited.set(nextKey, next);
         parent.set(nextKey, { prevKey: curKey, choiceId: ch.id });

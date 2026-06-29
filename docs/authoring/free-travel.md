@@ -195,7 +195,7 @@ Do NOT hand-assemble `walkStateSpace` + `checkBucketAlignment` separately — it
 
 ## `valuesAtEndings` and `walkSeeded` are NOT roam-aware
 
-`valuesAtEndings` and `walkSeeded` are multi-chapter carry tools. They use the raw clock value as a state key (no bucketing), do not set `roam: true` on the inner walk, and will silently hit the cap on any meaningful roam map. An empty `softlocks` from `walkSeeded` on a roam game means nothing — the walk was likely capped.
+`valuesAtEndings` and `walkSeeded` are multi-chapter carry tools. `valuesAtEndings` uses its own non-roam raw-time state key (no bucketing) and will silently hit the cap on any meaningful roam map; `walkSeeded` delegates to `walkStateSpace` (which auto-detects roam from `profile.travel`), but both are multi-chapter carry helpers — and the container linter fires `ROAM_CARRY_UNVERIFIABLE` for any roam chapter in a multi-chapter game, so these tools should not be pointed at roam games in the first place.
 
 Use `verifyRoam` / `walkStateSpace` (with `roam: true` explicit) for all roam verification.
 

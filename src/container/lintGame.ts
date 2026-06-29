@@ -42,6 +42,23 @@ export function lintGame(game: Game): { ok: boolean; errors: LintIssue[]; warnin
       where: game.startChapterId });
   }
 
+  // Travel fence (v1): roam verification is single-chapter only — the container's seeded/value-at-endings walks
+  // are not yet roam-safe, so a roam chapter inside a multi-chapter carry would get a false all-clear.
+  const multiChapter = game.chapters.length > 1;
+  for (const ch of game.chapters) {
+    const resolved = resolveProfile(ch.story, game.profile).travel;
+    if (resolved !== 'free') continue;
+    if (multiChapter) {
+      errors.push({ level: 'error', code: 'ROAM_CARRY_UNVERIFIABLE',
+        message: `chapter ${ch.id} is travel:'free' inside a ${game.chapters.length}-chapter game — multi-chapter roam is unsupported in v1 (keep roam games single-chapter)`, where: ch.id });
+    }
+    // the engine reads only story.profile at runtime; inheriting travel from the game alone would silently not roam.
+    if (resolveProfile(ch.story).travel !== 'free') {
+      errors.push({ level: 'error', code: 'ROAM_CHAPTER_PROFILE_MISSING',
+        message: `chapter ${ch.id} resolves travel:'free' only via the game profile; declare travel:'free' in the chapter's own story.profile (the engine reads story.profile at runtime)`, where: ch.id });
+    }
+  }
+
   // reachability from start
   const reachable = new Set<string>();
   const stack = ids.has(game.startChapterId) ? [game.startChapterId] : [];

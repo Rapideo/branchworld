@@ -117,7 +117,8 @@ export interface VariableDef {
 export type ClockMode = 'timed' | 'untimed'; // 'long-horizon' reserved as a future value of this dimension
 export interface Profile {
   clock: ClockMode;
-  // future dimensions slot in here as OPTIONAL fields: travel?: 'off' | 'free'; investigation?: 'off' | 'on'; …
+  travel?: 'off' | 'free'; // free-roam navigation over the Location graph; default 'off'
+  // future dimensions slot in here as OPTIONAL fields: investigation?: 'off' | 'on'; …
 }
 
 export interface Story {

@@ -1,13 +1,17 @@
 import { GameEngine } from './engine';
 import { resolveEnding } from './endingResolver';
 import { evaluateConditions } from './conditions';
-import type { Story, GameView } from './types';
+import { resolveProfile } from './profile';
+import { checkBucketAlignment } from './travelLint';
+import type { Story, GameView, LintIssue } from './types';
 
 const DEFAULT_CAP = 50_000;
 
 export interface WalkReport {
   statesExplored: number;
   capHit: boolean;
+  deadRegions: string[];   // roam: forward-reachable node ids from which NO ending is reachable (co-reachability)
+  indeterminate: boolean;  // roam + capHit: the honesty results are from a partial walk — treat as FAIL, not all-clear
   zeroEnding: string[];
   softlocks: string[];
   orphanNodes: string[];
@@ -25,7 +29,7 @@ interface WNode {
 }
 
 // Canonical key: currentId + every piece of WorldState, with set-like arrays sorted.
-function keyOf(n: WNode, timeBucket?: number): string {
+function keyOf(n: WNode, timeKey: number): string {
   const s = n.snap.state;
   const sortArr = (a: string[]) => [...a].sort();
   return JSON.stringify({
@@ -35,7 +39,7 @@ function keyOf(n: WNode, timeBucket?: number): string {
     // quantizes time so same-bucket arrivals collapse — but it is APPROXIMATE: it skips states, so it can hide a
     // softlock / orphan ending. Lossless only when EVERY time threshold (time_* gates, event triggers, the
     // deadline, depletion step boundaries) is bucket-aligned. Use it for scale triage, never as a pass/fail gate.
-    time: timeBucket ? Math.floor(s.time / timeBucket) : s.time,
+    time: timeKey,
     location: s.location,
     clues: sortArr(s.clues),
     inventory: sortArr(s.inventory),
@@ -43,6 +47,13 @@ function keyOf(n: WNode, timeBucket?: number): string {
     completedEvents: sortArr(s.completedEvents),
     vars: Object.fromEntries(Object.entries(s.vars).sort(([a], [b]) => a.localeCompare(b))),
   });
+}
+
+// Effective time component: roam+untimed drops time (A<->A dedups); else raw, or bucketed when a bucket is given.
+function timeKeyFor(n: WNode, roam: boolean, untimed: boolean, timeBucket?: number): number {
+  if (roam && untimed) return 0;
+  const t = n.snap.state.time;
+  return timeBucket ? Math.floor(t / timeBucket) : t;
 }
 
 // Fork freely: restore(snap) puts a fresh-but-identical engine at any visited
@@ -66,11 +77,20 @@ interface WalkResult {
   softlocks: WNode[];
   zeroEnding: WNode[];
   parent: Map<string, { prevKey: string; choiceId: string } | null>;
+  edges: Map<string, Set<string>>; // FULL forward transition relation (every taken edge, incl. to-visited)
+  terminalKeys: Set<string>;
 }
 
-function walk(story: Story, cap: number, timeBucket?: number): WalkResult {
+function walk(story: Story, cap: number, timeBucket?: number, roamOpt?: boolean): WalkResult {
+  const profile = resolveProfile(story);
+  const roam = roamOpt ?? (profile.travel === 'free');
+  const untimed = profile.clock === 'untimed';
+  const key = (n: WNode) => keyOf(n, timeKeyFor(n, roam, untimed, timeBucket));
+
   const visited = new Map<string, WNode>();
   const parent = new Map<string, { prevKey: string; choiceId: string } | null>();
+  const edges = new Map<string, Set<string>>();
+  const terminalKeys = new Set<string>();
   const terminals: WNode[] = [];
   const exercisedChoices = new Set<string>();
   const choiceAvail = new Map<string, { available: number; locked: number }>();
@@ -81,7 +101,7 @@ function walk(story: Story, cap: number, timeBucket?: number): WalkResult {
   let capHit = false;
 
   const start = snapAt(story, null);
-  const startKey = keyOf(start, timeBucket);
+  const startKey = key(start);
   visited.set(startKey, start);
   parent.set(startKey, null);
   const queue: WNode[] = [start];
@@ -89,35 +109,42 @@ function walk(story: Story, cap: number, timeBucket?: number): WalkResult {
   while (queue.length) {
     if (visited.size >= cap) { capHit = true; break; }
     const cur = queue.shift()!;
-    const curKey = keyOf(cur, timeBucket);
+    const curKey = key(cur);
     reachedNodes.add(cur.snap.currentId);
 
     const ended = cur.view.endingReached;
     if (ended) {
       reachedEndings.add(ended.id);
       terminals.push(cur);
-      if (!resolveEnding(cur.snap.state, story)) zeroEnding.push(cur); // independent re-resolve
-      continue; // ending is absorbing
+      terminalKeys.add(curKey);
+      if (!resolveEnding(cur.snap.state, story)) zeroEnding.push(cur);
+      continue;
     }
 
     const available = cur.view.choices.filter((c) => c.available);
-    // H12: tally per-choice availability across every reached visit to this node (available vs locked).
     for (const c of cur.view.choices) {
       const k = `${cur.snap.currentId}::${c.id}`;
       const rec = choiceAvail.get(k) ?? { available: 0, locked: 0 };
       if (c.available) rec.available++; else rec.locked++;
       choiceAvail.set(k, rec);
     }
-    if (available.length === 0) {
-      // No ending, no available choice => genuine soft-lock
-      softlocks.push(cur);
-      continue;
-    }
+    if (available.length === 0) { softlocks.push(cur); continue; }
 
     for (const ch of available) {
       exercisedChoices.add(`${cur.snap.currentId}::${ch.id}`);
       const next = snapAt(story, cur, ch.id);
-      const nextKey = keyOf(next, timeBucket);
+      const nextKey = key(next);
+      // CO-REACHABILITY SOUNDNESS — record the FULL forward edge here, OUTSIDE the `if (!visited.has(nextKey))`
+      // block below. Every taken edge (including to an already-visited state) must be recorded; a re-visit edge
+      // can be the only route from a state to a terminal. Moving this inside the visited-guard reintroduces the
+      // spanning-tree bug the spec was rewritten to fix. (Reviewer: verify this placement explicitly.)
+      // Edge set is consumed only by computeDeadRegions, which walkStateSpace calls only under roam — skip the
+      // build entirely for non-roam walks (pure optimization, no behavior change).
+      if (roam) {
+        const set = edges.get(curKey) ?? new Set<string>();
+        set.add(nextKey);
+        edges.set(curKey, set);
+      }
       if (!visited.has(nextKey)) {
         visited.set(nextKey, next);
         parent.set(nextKey, { prevKey: curKey, choiceId: ch.id });
@@ -128,7 +155,33 @@ function walk(story: Story, cap: number, timeBucket?: number): WalkResult {
     if (capHit) break;
   }
 
-  return { story, visited, terminals, capHit, exercisedChoices, choiceAvail, reachedNodes, reachedEndings, softlocks, zeroEnding, parent };
+  return { story, visited, terminals, capHit, exercisedChoices, choiceAvail, reachedNodes, reachedEndings, softlocks, zeroEnding, parent, edges, terminalKeys };
+}
+
+/** Co-reachability core (pure, exported for direct testing): the set of state keys from which SOME terminal is
+ *  reachable, computed by BFS BACKWARD over the FULL forward edge set (NOT a spanning tree — back/re-visit edges
+ *  are load-bearing). A key is co-reaching iff it is a terminal or has an edge to a co-reaching key. */
+export function coReachable(terminalKeys: Set<string>, edges: Map<string, Set<string>>): Set<string> {
+  const rev = new Map<string, string[]>();
+  for (const [from, tos] of edges) for (const to of tos) {
+    const a = rev.get(to);
+    if (a) a.push(from); else rev.set(to, [from]);
+  }
+  const canReach = new Set<string>(terminalKeys);
+  const q = [...terminalKeys];
+  while (q.length) {
+    const k = q.shift()!;
+    for (const p of rev.get(k) ?? []) if (!canReach.has(p)) { canReach.add(p); q.push(p); }
+  }
+  return canReach;
+}
+
+// Any forward-reached state not co-reaching is a dead region. Returns distinct node ids.
+function computeDeadRegions(w: WalkResult): string[] {
+  const canReach = coReachable(w.terminalKeys, w.edges);
+  const dead = new Set<string>();
+  for (const [k, n] of w.visited) if (!canReach.has(k)) dead.add(n.snap.currentId);
+  return [...dead];
 }
 
 // EE-3 overlap: two non-default endings simultaneously satisfiable on a reachable
@@ -183,12 +236,16 @@ function computeEventPresent(w: WalkResult) {
   return w.story.events.map((ev) => ({ eventId: ev.id, ok: fired.has(ev.id) }));
 }
 
-export function walkStateSpace(story: Story, opts?: { cap?: number; timeBucket?: number }): WalkReport {
+export function walkStateSpace(story: Story, opts?: { cap?: number; timeBucket?: number; roam?: boolean }): WalkReport {
   const cap = opts?.cap ?? DEFAULT_CAP;
-  const w = walk(story, cap, opts?.timeBucket);
+  const profile = resolveProfile(story);
+  const roam = opts?.roam ?? (profile.travel === 'free');
+  const w = walk(story, cap, opts?.timeBucket, roam);
   return {
     statesExplored: w.visited.size,
     capHit: w.capHit,
+    indeterminate: roam && w.capHit,
+    deadRegions: roam ? computeDeadRegions(w) : [],
     zeroEnding: [...new Set(w.zeroEnding.map((n) => n.view.endingReached?.id ?? n.snap.currentId))],
     softlocks: [...new Set(w.softlocks.map((n) => n.snap.currentId))],
     orphanNodes: findOrphanNodes(w),
@@ -196,10 +253,19 @@ export function walkStateSpace(story: Story, opts?: { cap?: number; timeBucket?:
     deadChoices: findDeadChoices(w),
     eventRecovery: checkEventRecovery(w),
     eventPresent: computeEventPresent(w),
-    conditionalChoices: [...w.choiceAvail.entries()]
-      .filter(([, v]) => v.available > 0 && v.locked > 0)
-      .map(([k]) => k)
-      .sort(),
+    conditionalChoices: [...w.choiceAvail.entries()].filter(([, v]) => v.available > 0 && v.locked > 0).map(([k]) => k).sort(),
     overlaps: findEndingAmbiguities(w),
   };
+}
+
+export interface RoamVerifyResult { ok: boolean; report: WalkReport; bucketIssues: LintIssue[]; }
+
+/** The roam verify gate. Timed roam MUST pass a bucket that divides every time threshold (checkBucketAlignment);
+ *  the walk must be complete (not indeterminate) and clean (no softlocks, dead regions, or orphan endings). */
+export function verifyRoam(story: Story, opts?: { timeBucket?: number; cap?: number }): RoamVerifyResult {
+  const bucketIssues = opts?.timeBucket !== undefined ? checkBucketAlignment(story, opts.timeBucket) : [];
+  const report = walkStateSpace(story, { roam: true, timeBucket: opts?.timeBucket, cap: opts?.cap });
+  const ok = bucketIssues.length === 0 && !report.indeterminate
+    && report.softlocks.length === 0 && report.deadRegions.length === 0 && report.orphanEndings.length === 0;
+  return { ok, report, bucketIssues };
 }

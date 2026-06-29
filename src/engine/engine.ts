@@ -7,6 +7,9 @@ import { resolveEndingAt } from './endingResolver';
 import { parseTime, formatTime } from './time';
 import { buildBounds, type BoundsMap } from './bounds';
 import { applyResourceStep } from './resources';
+import { resolveProfile } from './profile';
+import { parseTravelDest, hubLocation, travelDests, travelTripEffects, destDefaultNode, travelChoiceId } from './travel';
+import type { Profile } from './types';
 
 export class GameEngine {
   private story: Story;
@@ -17,6 +20,7 @@ export class GameEngine {
   private bounds: BoundsMap;
   private log: string[] = [];
   private ending?: Ending;
+  private profile: Profile;
 
   constructor(story: Story) {
     this.story = story;
@@ -25,6 +29,7 @@ export class GameEngine {
     this.deadline = story.deadline !== undefined ? parseTime(story.deadline) : Infinity;
     this.startTime = parseTime(story.startTime);
     this.bounds = buildBounds(story);
+    this.profile = resolveProfile(story);
     this.enter(this.currentId);
   }
 
@@ -77,6 +82,15 @@ export class GameEngine {
         ? { id: c.id, label: c.label, available: true }
         : { id: c.id, label: c.label, available: false, lockedReason: explainFailing(c.conditions, this.state) };
     });
+    if (this.profile.travel === 'free' && !this.ending) {
+      const here = hubLocation(this.story, this.state.location, this.currentId);
+      if (here) {
+        for (const dest of travelDests(here)) {
+          const dl = this.story.locations.find((l) => l.id === dest);
+          choices.push({ id: travelChoiceId(dest), label: `Travel to ${dl?.name ?? dest}`, available: true });
+        }
+      }
+    }
     return {
       node: n,
       time: this.state.time,
@@ -91,6 +105,8 @@ export class GameEngine {
 
   choose(choiceId: string): GameView {
     if (this.ending) return this.view();
+    const dest = parseTravelDest(choiceId);
+    if (dest !== undefined) return this.travelTo(dest);
     const n = this.node(this.currentId);
     const choice = (n.choices || []).find((c) => c.id === choiceId);
     if (!choice) throw new Error(`Unknown choice: ${choiceId}`);
@@ -99,6 +115,19 @@ export class GameEngine {
     }
     this.state = applyEffects(this.state, choice.effects, this.bounds);
     this.enter(choice.destination);
+    return this.view();
+  }
+
+  private travelTo(dest: string): GameView {
+    if (this.profile.travel !== 'free') throw new Error(`Travel is off; cannot travel to ${dest}`);
+    const here = hubLocation(this.story, this.state.location, this.currentId);
+    if (!here) throw new Error(`Not at a travel hub; cannot travel to ${dest}`);
+    if (!travelDests(here).includes(dest)) throw new Error(`Location ${here.id} is not connected to ${dest}`);
+    if (here.travelTimes?.[dest] === undefined) throw new Error(`No travel time from ${here.id} to ${dest}`);
+    const destNode = destDefaultNode(this.story, dest);
+    if (!destNode) throw new Error(`Destination ${dest} has no defaultNode`);
+    this.state = applyEffects(this.state, travelTripEffects(here, dest), this.bounds);
+    this.enter(destNode);
     return this.view();
   }
 

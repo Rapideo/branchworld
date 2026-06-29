@@ -4,6 +4,7 @@ import { collectSymbols } from './symbols';
 import type { StorySymbols } from './symbols';
 import { coerce } from './conditions';
 import { resolveProfile, validateProfile } from './profile';
+import { travelNodeEdges, travelHops } from './travel';
 
 const RESERVED_FIELDS = new Set(['time', 'location']);
 const NON_VAR_EFFECT_OPS = new Set<Effect['op']>([
@@ -55,7 +56,7 @@ function choiceMinutes(c: Choice): number {
     .reduce((a, e) => a + Number(e.value ?? 0), 0);
 }
 
-function computeReachable(story: Story): Set<string> {
+function computeReachable(story: Story, travelEdges: Map<string, string[]>): Set<string> {
   const out = new Set<string>();
   const stack: string[] = [story.startNodeId];
   while (stack.length) {
@@ -65,26 +66,28 @@ function computeReachable(story: Story): Set<string> {
     if (!n) continue;
     out.add(id);
     for (const c of n.choices || []) stack.push(c.destination);
+    for (const dest of travelEdges.get(id) ?? []) stack.push(dest);
   }
   return out;
 }
 
-function timeBounds(story: Story): { maxTime: number; minTime: number } {
+function timeBounds(story: Story, hops: Map<string, { dest: string; minutes: number }[]>): { maxTime: number; minTime: number } {
   const byId = new Map(story.nodes.map((n) => [n.id, n]));
   let maxTime = 0;
   let minTime = Infinity;
   const dfs = (id: string, acc: number, path: Set<string>): void => {
     const n = byId.get(id);
-    if (!n || n.resolvesEnding || (n.choices?.length ?? 0) === 0 || path.has(id)) {
+    const choices = n?.choices ?? [];
+    const travel = hops.get(id) ?? [];
+    if (!n || n.resolvesEnding || (choices.length === 0 && travel.length === 0) || path.has(id)) {
       maxTime = Math.max(maxTime, acc);
       minTime = Math.min(minTime, acc);
       return;
     }
     const np = new Set(path);
     np.add(id);
-    for (const c of n.choices) {
-      dfs(c.destination, acc + choiceMinutes(c), np);
-    }
+    for (const c of choices) dfs(c.destination, acc + choiceMinutes(c), np);
+    for (const h of travel) dfs(h.dest, acc + h.minutes, np);
   };
   dfs(story.startNodeId, 0, new Set());
   if (minTime === Infinity) minTime = 0;
@@ -107,11 +110,20 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
   const itemVars = new Set(story.variables.filter((v) => v.kind === 'item').map((v) => v.name));
   const sym = collectSymbols(story);
   const profile = resolveProfile(story, inherited);
+  const travelEdges = travelNodeEdges(story, profile);
+  const hops = travelHops(story, profile);
 
   // reserved namespace: the '__' prefix is engine-internal (e.g. resource offsets stored as `__roff_<id>`)
   for (const v of story.variables) {
     if (v.name.startsWith('__')) err('RESERVED_VAR_PREFIX', `Variable '${v.name}' uses the reserved '__' prefix (engine-internal, e.g. resource offsets)`, v.name);
     if (v.kind === 'item' && v.type !== 'number') err('ITEM_NOT_NUMERIC', `Item '${v.name}' (kind:'item') must be type 'number'`, v.name);
+  }
+
+  // reserved namespace on CHOICE ids too — '__travel_<dest>' choices are engine-injected; an authored collision is an error.
+  for (const n of story.nodes) {
+    for (const c of n.choices || []) {
+      if (c.id.startsWith('__')) err('RESERVED_CHOICE_ID', `Choice '${c.id}' (node ${n.id}) uses the reserved '__' prefix (engine-injected, e.g. travel choices)`, n.id);
+    }
   }
 
   // duplicate node ids
@@ -136,11 +148,12 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
   for (const n of story.nodes) {
     if (n.resolvesEnding || n.endsWith) continue; // an endsWith node resolves (F3), so it needs no choices
     const choices = n.choices ?? [];
-    if (choices.length === 0) {
+    const travelExits = travelEdges.get(n.id) ?? [];
+    if (choices.length === 0 && travelExits.length === 0) {
       err('NO_EXIT', `Node ${n.id} has no choices and does not resolve an ending`, n.id);
       continue;
     }
-    if (choices.every((c) => staticallyDeadChoice(c, story, sym))) {
+    if (choices.length > 0 && choices.every((c) => staticallyDeadChoice(c, story, sym)) && travelExits.length === 0) {
       err('SOFT_LOCK', `Node ${n.id} has no escapable exit — every choice is permanently locked`, n.id);
     }
   }
@@ -243,7 +256,7 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
   for (const ev of story.events) checkTimeDeltas(ev.ifAbsentEffects, ev.id);
 
   // reachability
-  const reachable = computeReachable(story);
+  const reachable = computeReachable(story, travelEdges);
   const presentNodes = new Set(story.events.map((e) => e.ifPresentNode));
   for (const n of story.nodes) {
     if (!reachable.has(n.id) && !presentNodes.has(n.id)) {
@@ -352,7 +365,7 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
 
     // deadline reachability
     const window = deadlineMin - startMin;
-    const { maxTime, minTime } = timeBounds(story);
+    const { maxTime, minTime } = timeBounds(story, hops);
     if (maxTime < window) {
       err('CLOCK_CANNOT_BITE', `Longest reachable path accumulates ${maxTime} min but the deadline window is ${window} min — the clock can never run out`);
     }

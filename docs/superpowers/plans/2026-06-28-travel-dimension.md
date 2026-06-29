@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Plan rev 2 (2026-06-28, post Team gut-check).** Two lenses (soundness + implementability) traced the plan against live code and returned FIX-BEFORE-BUILD. Folded in: **(blocker)** Task 8 imports `walkStateSpace` from the submodule, not the `../engine` barrel (it isn't exported there); **(must-fix)** Task 6's co-reachability gets a *pure* `coReachable` function with a deterministic back-edge unit test (the old reconvergent fixture didn't actually require the full edge set, because `visited[]` is in the key — a tree-only bug would have passed it); **(must-fix)** `timeBounds` becomes travel-aware so a travel-driven timed roam game doesn't false-positive `CLOCK_CANNOT_BITE` (via a new `travelHops` helper); **(should-fix)** the finiteness lint is sign-aware (a negative-literal `increment` farms downward), the bucket-alignment event-trigger scan is `readsClock`-gated (no spurious thresholds), and the `TRAVEL_ASYMMETRIC_EDGE` test fixture actually triggers the code; plus a `verifyRoam` entrypoint that couples bucket-alignment + the walk + fail-on-(indeterminate/softlocks/deadRegions/orphanEndings) so roam verification is correct by default.
+
 **Goal:** Add an opt-in `travel: 'off' | 'free'` profile dimension that turns the dormant `Location` graph into engine-generated free-roam navigation, with a sound bounded-exhaustive roam verification mode.
 
 **Architecture:** A new profile dimension flips roam on. A shared `travel.ts` module owns the mechanic (hub detection, synthetic `__travel_<dest>` choices, the trip). `engine.ts` injects travel choices in `view()` and handles them in `choose()` before its unknown-choice throw. The exhaustive walker (`stateSpaceWalk.ts`) gains a roam mode: drop/bucket time for finiteness, record the **full** forward edge set, and run a co-reachability pass (`deadRegions`) — the property free-roam actually needs. New lints (`travelLint.ts`) enforce graph coherence and the roam-verification preconditions; the container fences multi-chapter roam off in v1. A reference game proves the whole thing.
@@ -56,12 +58,9 @@ Sequencing: Phase 1 mechanic (Tasks 1–3) → Phase 2 lints (Tasks 4–5) → P
 
 Note: the `travelDimension.validate` returns `[]` on purpose — travel's lints mix error+warning levels and need reachability/symbol context the `Dimension.validate → ProfileIssue` (error-only) hook can't carry, so they live in `travelLint.ts` (Task 5), exactly as `lintResources` lives outside the dimension hook. The dimension entry's real framework job here is resolution/normalization (`DEFAULT_PROFILE`/`resolveProfile`).
 
-- [ ] **Step 1: Write the failing test** — append to `src/engine/profile.test.ts` inside the top-level `describe`:
+- [ ] **Step 1: Write the failing test** — first ensure `DEFAULT_PROFILE` is on the EXISTING `from './profile'` import line at the top of `profile.test.ts` (add it there; do NOT add a second import statement — a duplicate import is a TS2300 error). Then append this `it` inside the top-level `describe`:
 
 ```ts
-import { DEFAULT_PROFILE, resolveProfile } from './profile';
-// (DEFAULT_PROFILE may need adding to the existing import line.)
-
 it('travel dimension: default is off and appears in the resolved profile', () => {
   expect(DEFAULT_PROFILE).toEqual({ clock: 'timed', travel: 'off' });
   expect(resolveProfile(timedStory())).toEqual({ clock: 'timed', travel: 'off' });
@@ -160,7 +159,8 @@ EOF
   - `travelDests(loc: Location): string[]`
   - `travelTripEffects(loc: Location, dest: string): Effect[]`
   - `destDefaultNode(story: Story, dest: string): string | undefined`
-  - `travelNodeEdges(story: Story, profile: Profile): Map<string, string[]>`
+  - `travelHops(story: Story, profile: Profile): Map<string, { dest: string; minutes: number }[]>` — hub-node → connected dest-hub-nodes WITH the travel minutes; the single source of truth for travel reachability.
+  - `travelNodeEdges(story: Story, profile: Profile): Map<string, string[]>` — derived from `travelHops` (dests only); used where minutes aren't needed.
 - Consumes: `Story`, `Location`, `Effect`, `Profile` from `./types`.
 
 - [ ] **Step 1: Write the failing test** — create `src/engine/travel.test.ts`:
@@ -170,7 +170,7 @@ import { describe, it, expect } from 'vitest';
 import type { Story, Location } from './types';
 import {
   travelChoiceId, parseTravelDest, hubLocation, travelDests,
-  travelTripEffects, destDefaultNode, travelNodeEdges,
+  travelTripEffects, destDefaultNode, travelHops, travelNodeEdges,
 } from './travel';
 
 const locA: Location = { id: 'a', name: 'Aaa', connectedLocations: ['b'], travelTimes: { b: 10 }, defaultNode: 'a_hub' };
@@ -196,11 +196,16 @@ describe('travel helpers', () => {
     expect(destDefaultNode(story, 'b')).toBe('b_hub');
     expect(travelDests(locA)).toEqual(['b']);
   });
-  it('travelNodeEdges maps hub->dest-hub only when travel is free', () => {
+  it('travelHops / travelNodeEdges map hub->dest only when travel is free', () => {
+    expect(travelHops(story, { clock: 'timed', travel: 'free' })).toEqual(new Map([
+      ['a_hub', [{ dest: 'b_hub', minutes: 10 }]],
+      ['b_hub', [{ dest: 'a_hub', minutes: 10 }]],
+    ]));
     expect(travelNodeEdges(story, { clock: 'timed', travel: 'free' })).toEqual(new Map([
       ['a_hub', ['b_hub']],
       ['b_hub', ['a_hub']],
     ]));
+    expect(travelHops(story, { clock: 'timed', travel: 'off' }).size).toBe(0);
     expect(travelNodeEdges(story, { clock: 'timed', travel: 'off' }).size).toBe(0);
   });
 });
@@ -248,19 +253,27 @@ export function travelTripEffects(loc: Location, dest: string): Effect[] {
   ];
 }
 
-/** Hub-node -> connected dest-hub-nodes, in declared connectedLocations order. Empty unless travel:'free'. */
-export function travelNodeEdges(story: Story, profile: Profile): Map<string, string[]> {
-  const edges = new Map<string, string[]>();
-  if (profile.travel !== 'free') return edges;
+/** Hub-node -> connected dest-hub-nodes WITH travel minutes, in declared connectedLocations order. The single
+ *  source of truth for travel reachability. Empty unless travel:'free'. */
+export function travelHops(story: Story, profile: Profile): Map<string, { dest: string; minutes: number }[]> {
+  const hops = new Map<string, { dest: string; minutes: number }[]>();
+  if (profile.travel !== 'free') return hops;
   for (const loc of story.locations) {
     if (!loc.defaultNode) continue;
-    const dests: string[] = [];
+    const out: { dest: string; minutes: number }[] = [];
     for (const d of travelDests(loc)) {
       const dn = destDefaultNode(story, d);
-      if (dn) dests.push(dn);
+      if (dn) out.push({ dest: dn, minutes: loc.travelTimes?.[d] ?? 0 });
     }
-    edges.set(loc.defaultNode, dests);
+    hops.set(loc.defaultNode, out);
   }
+  return hops;
+}
+
+/** Dests only — derived from travelHops, for callers that don't need the minutes. */
+export function travelNodeEdges(story: Story, profile: Profile): Map<string, string[]> {
+  const edges = new Map<string, string[]>();
+  for (const [from, hops] of travelHops(story, profile)) edges.set(from, hops.map((h) => h.dest));
   return edges;
 }
 ```
@@ -443,8 +456,10 @@ EOF
 - Test: `src/engine/linter.travel.test.ts` (create)
 
 **Interfaces:**
-- Consumes: `travelNodeEdges` (Task 2), `resolveProfile` (already imported in linter.ts at line 6).
-- Produces: with `travel:'free'`, `computeReachable` follows hub→dest-hub edges; `NO_EXIT`/`SOFT_LOCK` count injected travel exits; `EVENT_RECOVERY_UNREACHABLE` honors travel reachability. Always: `RESERVED_CHOICE_ID` (error) on a `__`-prefixed choice id.
+- Consumes: `travelNodeEdges`, `travelHops` (Task 2), `resolveProfile` (already imported in linter.ts at line 6).
+- Produces: with `travel:'free'`, `computeReachable` follows hub→dest-hub edges; `NO_EXIT`/`SOFT_LOCK` count injected travel exits; `EVENT_RECOVERY_UNREACHABLE` honors travel reachability; **`timeBounds` counts travel-hop minutes** (so `CLOCK_CANNOT_BITE`/`DEADLINE_UNWINNABLE` see travel-driven clock pressure). Always: `RESERVED_CHOICE_ID` (error) on a `__`-prefixed choice id.
+
+Why `timeBounds` must change: today it DFS-sums only authored `add_minutes` on `node.choices` (`linter.ts:52-92`). A timed roam game's clock is advanced mainly by **travel** (`travelTimes`), which it can't see — so a travel-driven timed roam game would hit a false `CLOCK_CANNOT_BITE`. Threading the per-edge travel minutes (`travelHops`) into the DFS fixes it; the existing `path.has(id)` cycle-guard already bounds the cyclic travel graph to simple paths.
 
 - [ ] **Step 1: Write the failing test** — create `src/engine/linter.travel.test.ts`:
 
@@ -483,6 +498,18 @@ describe('linter travel-awareness', () => {
     const codes = lintStory(s).errors.map((e) => e.code);
     expect(codes).toContain('RESERVED_CHOICE_ID');
   });
+
+  it('timeBounds counts travel minutes: a travel-driven timed roam game is NOT falsely CLOCK_CANNOT_BITE', () => {
+    // No authored add_minutes — the clock bites ONLY via travel. Longest simple path a->b->(back to a, cycle-guard
+    // terminates) accumulates 20 travel-min, so a 15-min window can bite. Without travel-aware timeBounds, maxTime
+    // would be 0 (authored minutes only) and CLOCK_CANNOT_BITE would falsely fire.
+    const s = roamStory();
+    s.profile = { clock: 'timed', travel: 'free' };
+    s.startTime = '00:00';
+    s.deadline = '00:15';
+    const codes = lintStory(s).errors.map((e) => e.code);
+    expect(codes).not.toContain('CLOCK_CANNOT_BITE');
+  });
 });
 ```
 
@@ -496,7 +523,7 @@ Expected: FAIL — `b_hub` is reported `UNREACHABLE_NODE` (computeReachable igno
 Add the travel import at the top:
 
 ```ts
-import { travelNodeEdges } from './travel';
+import { travelNodeEdges, travelHops } from './travel';
 ```
 
 Replace `computeReachable` (lines 58-70) to accept and follow travel edges:
@@ -518,13 +545,43 @@ function computeReachable(story: Story, travelEdges: Map<string, string[]>): Set
 }
 ```
 
-In `lintStory`, the `profile` is already resolved at line 109. Just below it, derive the edges:
+In `lintStory`, the `profile` is already resolved at line 109. Just below it, derive the edges + hops:
 
 ```ts
   const travelEdges = travelNodeEdges(story, profile);
+  const hops = travelHops(story, profile);
 ```
 
 Update the call site at line 246: `const reachable = computeReachable(story, travelEdges);`
+
+Make `timeBounds` travel-aware — replace the function (lines 72-92) so the DFS also descends travel hops and adds their minutes (the `path.has(id)` guard already bounds the cyclic graph):
+
+```ts
+function timeBounds(story: Story, hops: Map<string, { dest: string; minutes: number }[]>): { maxTime: number; minTime: number } {
+  const byId = new Map(story.nodes.map((n) => [n.id, n]));
+  let maxTime = 0;
+  let minTime = Infinity;
+  const dfs = (id: string, acc: number, path: Set<string>): void => {
+    const n = byId.get(id);
+    const choices = n?.choices ?? [];
+    const travel = hops.get(id) ?? [];
+    if (!n || n.resolvesEnding || (choices.length === 0 && travel.length === 0) || path.has(id)) {
+      maxTime = Math.max(maxTime, acc);
+      minTime = Math.min(minTime, acc);
+      return;
+    }
+    const np = new Set(path);
+    np.add(id);
+    for (const c of choices) dfs(c.destination, acc + choiceMinutes(c), np);
+    for (const h of travel) dfs(h.dest, acc + h.minutes, np);
+  };
+  dfs(story.startNodeId, 0, new Set());
+  if (minTime === Infinity) minTime = 0;
+  return { maxTime, minTime };
+}
+```
+
+Update its call site (line 355): `const { maxTime, minTime } = timeBounds(story, hops);`
 
 In the `NO_EXIT`/`SOFT_LOCK` block (lines 135-146), count travel exits so a hub with only travel exits is not a no-exit node. Replace the `const choices = n.choices ?? [];` / `if (choices.length === 0)` logic:
 
@@ -566,13 +623,13 @@ Expected: PASS — new tests green; existing games still lint identically (their
 ```bash
 git add src/engine/linter.ts src/engine/linter.travel.test.ts
 git commit -F - <<'EOF'
-feat(travel): travel-aware reachability + reserved choice-id guard
+feat(travel): travel-aware reachability + clock-bite + reserved choice-id guard
 
 computeReachable / NO_EXIT / SOFT_LOCK / EVENT_RECOVERY_UNREACHABLE now follow
-hub->dest-hub travel edges when travel:'free', so the static linter stops
-disagreeing with the walker on travel-only nodes and transit hubs. Add
-RESERVED_CHOICE_ID (always-on) mirroring RESERVED_VAR_PREFIX. travel:'off'
-games are unaffected (empty travel-edge map).
+hub->dest-hub travel edges when travel:'free', and timeBounds counts travel-hop
+minutes so a travel-driven timed roam game doesn't false-positive
+CLOCK_CANNOT_BITE. Add RESERVED_CHOICE_ID (always-on) mirroring
+RESERVED_VAR_PREFIX. travel:'off' games are unaffected (empty travel map).
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
@@ -628,16 +685,24 @@ describe('travel structural lints', () => {
   it('clean roam graph lints clean', () => {
     expect(lintTravel(base(), { clock: 'untimed', travel: 'free' })).toEqual([]);
   });
-  it('TRAVEL_MISSING_TIME / TRAVEL_UNKNOWN_LOCATION / TRAVEL_NO_HUB / TRAVEL_ASYMMETRIC_EDGE / TRAVEL_HUB_IS_TERMINAL', () => {
+  it('TRAVEL_MISSING_TIME / TRAVEL_UNKNOWN_LOCATION / TRAVEL_NO_HUB / TRAVEL_ASYMMETRIC_EDGE', () => {
     const s = base();
-    s.locations[0].travelTimes = {};                 // missing time a->b
-    s.locations[0].connectedLocations = ['b', 'zzz']; // unknown loc + now asymmetric (zzz, and b<-a still ok)
+    s.locations[0].travelTimes = {};                  // missing time a->b
+    s.locations[0].connectedLocations = ['b', 'zzz']; // unknown loc 'zzz'
+    s.locations[1].connectedLocations = [];           // b no longer connects back to a => a->b is asymmetric
     s.locations[1].defaultNode = undefined;           // b has no hub
     const codes = lintTravel(s, { clock: 'untimed', travel: 'free' }).map((i) => i.code);
     expect(codes).toContain('TRAVEL_MISSING_TIME');
     expect(codes).toContain('TRAVEL_UNKNOWN_LOCATION');
     expect(codes).toContain('TRAVEL_NO_HUB');
-    expect(codes).toContain('TRAVEL_ASYMMETRIC_EDGE');
+    expect(codes).toContain('TRAVEL_ASYMMETRIC_EDGE'); // a lists b, b no longer lists a
+  });
+  it('TRAVEL_HUB_IS_TERMINAL warns when a location hub resolves an ending', () => {
+    const s = base();
+    s.nodes[2].resolvesEnding = true; // b_hub is now terminal
+    s.nodes[2].choices = [];
+    const codes = lintTravel(s, { clock: 'untimed', travel: 'free' }).map((i) => i.code);
+    expect(codes).toContain('TRAVEL_HUB_IS_TERMINAL');
   });
   it('TRAVEL_GRAPH_IGNORED warns when a graph is declared but travel:off', () => {
     const codes = lintTravel(base(), { clock: 'untimed', travel: 'off' }).map((i) => i.code);
@@ -696,6 +761,15 @@ function boundsOf(story: Story): Map<string, { min?: number; max?: number }> {
   return m;
 }
 
+// num() mirrors effects.ts: increment adds +num(value), decrement adds -num(value). A write farms unboundedly
+// when it grows a keyed numeric var in a direction with no bound. Sign-aware: a negative-literal increment grows
+// DOWN (needs a min), a negative-literal decrement grows UP (needs a max).
+function num(v: string | undefined): number {
+  if (v === undefined) return 1; // increment/decrement default step is 1
+  const n = Number(v);
+  return Number.isNaN(n) ? 0 : n;
+}
+
 function unboundedWrites(story: Story): LintIssue[] {
   const out: LintIssue[] = [];
   const bounds = boundsOf(story);
@@ -706,13 +780,15 @@ function unboundedWrites(story: Story): LintIssue[] {
           `adjust_resource on '${e.field}' is roam-reachable: its '__roff_' offset is unclamped and keyed, farming infinite states under roam — not allowed in a roam game`, where));
         continue;
       }
-      if (e.op === 'increment' && bounds.get(e.field)?.max === undefined) {
+      if (e.op !== 'increment' && e.op !== 'decrement') continue;
+      const delta = e.op === 'increment' ? num(e.value) : -num(e.value);
+      if (delta === 0) continue; // no growth
+      const b = bounds.get(e.field);
+      const grows = delta > 0 ? 'up' : 'down';
+      const needed = delta > 0 ? b?.max : b?.min;
+      if (needed === undefined) {
         out.push(issue('error', 'ROAM_UNBOUNDED_HUB_WRITE',
-          `increment of '${e.field}' has no max bound — under roam it farms infinite keyed states; declare a max`, where));
-      }
-      if (e.op === 'decrement' && bounds.get(e.field)?.min === undefined) {
-        out.push(issue('error', 'ROAM_UNBOUNDED_HUB_WRITE',
-          `decrement of '${e.field}' has no min bound — under roam it farms infinite keyed states; declare a min`, where));
+          `${e.op} of '${e.field}' (grows ${grows}) has no ${delta > 0 ? 'max' : 'min'} bound — under roam it farms infinite keyed states; declare a ${delta > 0 ? 'max' : 'min'}`, where));
       }
     }
   };
@@ -766,7 +842,7 @@ export function roamTimeThresholds(story: Story): number[] {
   const scan = (cs: Condition[] | undefined) => { for (const c of cs ?? []) if (readsClock(c)) for (const m of litMinutes(c)) if (Number.isFinite(m)) set.add(m); };
   for (const n of story.nodes) for (const c of n.choices ?? []) scan(c.conditions);
   for (const en of story.endings) scan(en.conditions);
-  for (const ev of story.events) for (const c of ev.trigger ?? []) for (const m of litMinutes(c)) if (Number.isFinite(m)) set.add(m);
+  for (const ev of story.events) scan(ev.trigger); // readsClock-gated — a non-time numeric trigger must NOT inject a spurious threshold
   if (story.deadline !== undefined) set.add(parseTime(story.deadline));
   return [...set];
 }
@@ -831,18 +907,37 @@ EOF
 - Test: `src/engine/stateSpaceWalk.travel.test.ts` (create)
 
 **Interfaces:**
-- Consumes: `resolveProfile` (from `./profile`).
-- Produces: `walkStateSpace(story, { cap?, timeBucket?, roam? })` — `WalkReport` gains `deadRegions: string[]` and `indeterminate: boolean`. In roam mode: untimed drops time from the key, timed buckets it; the walk records the full forward edge set and computes `deadRegions`; `indeterminate = roam && capHit`.
+- Consumes: `resolveProfile` (from `./profile`), `checkBucketAlignment` (from `./travelLint`, Task 5), `LintIssue` (from `./types`).
+- Produces:
+  - `walkStateSpace(story, { cap?, timeBucket?, roam? })` — `WalkReport` gains `deadRegions: string[]` and `indeterminate: boolean`. In roam mode: untimed drops time from the key, timed buckets it; the walk records the full forward edge set and computes `deadRegions`; `indeterminate = roam && capHit`.
+  - `coReachable(terminalKeys: Set<string>, edges: Map<string, Set<string>>): Set<string>` — pure, exported for direct testing.
+  - `verifyRoam(story: Story, opts?: { timeBucket?: number; cap?: number }): { ok: boolean; report: WalkReport; bucketIssues: LintIssue[] }` — the safe-by-default roam verify gate: runs `checkBucketAlignment` (timed) + the roam walk, and `ok` is false on any bucket issue, `indeterminate`, softlock, dead region, or orphan ending.
 
-- [ ] **Step 1: Write the failing test** — create `src/engine/stateSpaceWalk.travel.test.ts`:
+- [ ] **Step 1: Write the failing test** — create `src/engine/stateSpaceWalk.travel.test.ts`. The FIRST test is the soundness guard: it exercises `coReachable` directly on a graph where a **back-edge is the only route to the terminal**, so a tree-only (parent-spanning-tree) implementation provably fails it. (The integration fixtures below can't guarantee a load-bearing back-edge, because `visited[]` is in the state key — so this pure test is the real regression guard.)
 
 ```ts
 import { describe, it, expect } from 'vitest';
 import type { Story } from './types';
-import { walkStateSpace } from './stateSpaceWalk';
+import { walkStateSpace, coReachable } from './stateSpaceWalk';
 
-// Reconvergent clean map: a<->b, both can finish. The soundness regression guard:
-// a tree-only co-reachability would false-positive b as dead (b->a edge dropped).
+describe('coReachable (full-edge soundness guard)', () => {
+  it('marks a state co-reaching THROUGH a back-edge to an already-visited state', () => {
+    // S0 -> T (terminal); S0 -> X; X -> S0 (the ONLY way out of X is back to S0, a re-visit edge).
+    // X co-reaches T via X->S0->T. A tree built from first-discovery (S0->T, S0->X) drops X->S0 and would
+    // WRONGLY exclude X. coReachable uses the full edge set, so X must be included.
+    const edges = new Map<string, Set<string>>([
+      ['S0', new Set(['T', 'X'])],
+      ['X', new Set(['S0'])],
+    ]);
+    const reach = coReachable(new Set(['T']), edges);
+    expect(reach.has('S0')).toBe(true);
+    expect(reach.has('X')).toBe(true);  // FAILS for a tree-only implementation
+  });
+});
+
+// Reconvergent clean map: a<->b, both can finish. Integration smoke test that roam terminates and reports no
+// dead regions on a real game. (The deterministic co-reachability soundness guard is the pure coReachable test
+// above — an integration fixture can't force a load-bearing back-edge because visited[] is in the state key.)
 function reconvergent(): Story {
   return {
     id: 't', title: 'T', startNodeId: 'a_hub', startTime: '00:00', startLocation: 'a',
@@ -899,7 +994,7 @@ Note on `stranded()`: `c_hub` has no choices and no travel exits → it is also 
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run src/engine/stateSpaceWalk.travel.test.ts`
-Expected: FAIL — `r.deadRegions` / `r.indeterminate` are `undefined` (fields don't exist); and untimed roam runs to cap (time not dropped).
+Expected: FAIL — `coReachable` is not exported (import error); `r.deadRegions` / `r.indeterminate` are `undefined` (fields don't exist); untimed roam runs to cap (time not dropped).
 
 - [ ] **Step 3: Add the report fields** — in `src/engine/stateSpaceWalk.ts`, extend `WalkReport` (after line 19):
 
@@ -1010,7 +1105,10 @@ function walk(story: Story, cap: number, timeBucket?: number, roamOpt?: boolean)
       exercisedChoices.add(`${cur.snap.currentId}::${ch.id}`);
       const next = snapAt(story, cur, ch.id);
       const nextKey = key(next);
-      // record the FULL forward edge — even when nextKey is already visited (co-reachability needs all edges)
+      // CO-REACHABILITY SOUNDNESS — record the FULL forward edge here, OUTSIDE the `if (!visited.has(nextKey))`
+      // block below. Every taken edge (including to an already-visited state) must be recorded; a re-visit edge
+      // can be the only route from a state to a terminal. Moving this inside the visited-guard reintroduces the
+      // spanning-tree bug the spec was rewritten to fix. (Reviewer: verify this placement explicitly.)
       const set = edges.get(curKey) ?? new Set<string>();
       set.add(nextKey);
       edges.set(curKey, set);
@@ -1030,23 +1128,30 @@ function walk(story: Story, cap: number, timeBucket?: number, roamOpt?: boolean)
 
 Note: the `findOrphanEndings`/`computeEventPresent`/etc. helpers still take a `WalkResult` and are unchanged.
 
-- [ ] **Step 5: Add the co-reachability pass + report the new fields** — add this helper above `walkStateSpace`:
+- [ ] **Step 5: Add the co-reachability pass + report the new fields** — add a PURE, separately-testable core plus a thin wrapper above `walkStateSpace`. The pure function is the soundness-critical piece, so it is exported and unit-tested directly (Step 5a) on a graph where a back-edge is the only route to a terminal — a tree-only implementation would get that wrong:
 
 ```ts
-// Co-reachability: from which states is SOME ending still reachable? Walk the FULL edge set backward from every
-// terminal; any forward-reachable state not marked is a dead region. Returns distinct node ids.
-function computeDeadRegions(w: WalkResult): string[] {
+/** Co-reachability core (pure, exported for direct testing): the set of state keys from which SOME terminal is
+ *  reachable, computed by BFS BACKWARD over the FULL forward edge set (NOT a spanning tree — back/re-visit edges
+ *  are load-bearing). A key is co-reaching iff it is a terminal or has an edge to a co-reaching key. */
+export function coReachable(terminalKeys: Set<string>, edges: Map<string, Set<string>>): Set<string> {
   const rev = new Map<string, string[]>();
-  for (const [from, tos] of w.edges) for (const to of tos) {
+  for (const [from, tos] of edges) for (const to of tos) {
     const a = rev.get(to);
     if (a) a.push(from); else rev.set(to, [from]);
   }
-  const canReach = new Set<string>(w.terminalKeys);
-  const q = [...w.terminalKeys];
+  const canReach = new Set<string>(terminalKeys);
+  const q = [...terminalKeys];
   while (q.length) {
     const k = q.shift()!;
     for (const p of rev.get(k) ?? []) if (!canReach.has(p)) { canReach.add(p); q.push(p); }
   }
+  return canReach;
+}
+
+// Any forward-reached state not co-reaching is a dead region. Returns distinct node ids.
+function computeDeadRegions(w: WalkResult): string[] {
+  const canReach = coReachable(w.terminalKeys, w.edges);
   const dead = new Set<string>();
   for (const [k, n] of w.visited) if (!canReach.has(k)) dead.add(n.snap.currentId);
   return [...dead];
@@ -1079,6 +1184,24 @@ export function walkStateSpace(story: Story, opts?: { cap?: number; timeBucket?:
 }
 ```
 
+Add the safe-by-default verify gate (couples bucket-alignment + the roam walk so a consumer can't forget either). Add the imports at the top of the file — `import { checkBucketAlignment } from './travelLint';` and `import type { LintIssue } from './types';` — then:
+
+```ts
+export interface RoamVerifyResult { ok: boolean; report: WalkReport; bucketIssues: LintIssue[]; }
+
+/** The roam verify gate. Timed roam MUST pass a bucket that divides every time threshold (checkBucketAlignment);
+ *  the walk must be complete (not indeterminate) and clean (no softlocks, dead regions, or orphan endings). */
+export function verifyRoam(story: Story, opts?: { timeBucket?: number; cap?: number }): RoamVerifyResult {
+  const bucketIssues = opts?.timeBucket !== undefined ? checkBucketAlignment(story, opts.timeBucket) : [];
+  const report = walkStateSpace(story, { roam: true, timeBucket: opts?.timeBucket, cap: opts?.cap });
+  const ok = bucketIssues.length === 0 && !report.indeterminate
+    && report.softlocks.length === 0 && report.deadRegions.length === 0 && report.orphanEndings.length === 0;
+  return { ok, report, bucketIssues };
+}
+```
+
+(`travelLint` already imports only from `./types`/`./time`/`./profile`, so importing `checkBucketAlignment` into `stateSpaceWalk` introduces no import cycle.)
+
 - [ ] **Step 6: Run the test + full suite + typecheck**
 
 Run: `npx vitest run src/engine/stateSpaceWalk.travel.test.ts && npx vitest run && npx tsc --noEmit`
@@ -1092,12 +1215,12 @@ git commit -F - <<'EOF'
 feat(travel): bounded-exhaustive roam mode in the walker
 
 Roam keying (untimed drops time, timed buckets it) keeps the walk finite. The
-walk now records the FULL forward edge set (every taken edge, including to
-already-visited states) and runs a co-reachability pass: deadRegions = nodes
-from which no ending is reachable — the property free-roam needs, computed over
-the edge set, NOT the parent spanning tree (which would false-positive
-reconvergent maps). capHit in roam sets indeterminate (treat as FAIL). Non-roam
-games are unchanged.
+walk records the FULL forward edge set (every taken edge, incl. to already-
+visited states) and a pure, unit-tested coReachable() runs the co-reachability
+pass: deadRegions = nodes from which no ending is reachable — computed over the
+edge set, NOT the parent spanning tree (which false-positives reconvergent
+maps). capHit in roam sets indeterminate (FAIL). verifyRoam() is the safe verify
+gate (bucket-alignment + walk + fail-on-unclean). Non-roam games are unchanged.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
@@ -1238,9 +1361,12 @@ Design rules (mirror `untimedExample.ts`): latches set by unconditional `entryEf
 ```ts
 import { describe, it, expect } from 'vitest';
 import { lintGame, GameRunner } from './index';
-import { walkStateSpace, lintStory } from '../engine';
+import { lintStory } from '../engine';
+import { verifyRoam } from '../engine/stateSpaceWalk';            // submodule — not on the ../engine barrel
 import { checkBucketAlignment, roamTimeThresholds } from '../engine/travelLint';
 import { roamExample, roamExampleTimed, roamStranded } from './roamExample';
+
+const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 
 describe('roam reference game', () => {
   it('the untimed reference game lints clean (game + story)', () => {
@@ -1249,32 +1375,34 @@ describe('roam reference game', () => {
   });
 
   it('the untimed roam walk terminates, verifies, and has no dead regions', () => {
-    const r = walkStateSpace(roamExample.chapters[0].story);
-    expect(r.capHit).toBe(false);
-    expect(r.indeterminate).toBe(false);
-    expect(r.softlocks).toEqual([]);
-    expect(r.deadRegions).toEqual([]);          // reconvergent clean map — the soundness regression guard
-    expect(r.orphanEndings).toEqual([]);         // every ending reachable
+    const { ok, report } = verifyRoam(roamExample.chapters[0].story);
+    expect(report.capHit).toBe(false);
+    expect(report.deadRegions).toEqual([]);     // reconvergent clean map
+    expect(report.orphanEndings).toEqual([]);   // every ending reachable
+    expect(ok).toBe(true);
   });
 
   it('a GameRunner roams across locations and reaches the coupled good ending', () => {
     const g = new GameRunner(roamExample);
-    // (path filled in once the game is authored; assert it reaches the cross-location "good" ending)
-    expect(g.view().gameElapsedMinutes).toBeGreaterThanOrEqual(0);
+    // STEP 3 must replace this with the real path: the sequence of g.choose(...) calls — including
+    // '__travel_<dest>' ids — that picks up the key in `library` and finishes in `vault`, then:
+    //   expect(g.view().finalEndingId).toBe('<the coupled good ending id>');
+    expect(g.view().gameElapsedMinutes).toBeGreaterThanOrEqual(0); // placeholder — MUST be strengthened in Step 3
   });
 
   it('the stranded variant is flagged by co-reachability', () => {
-    const r = walkStateSpace(roamStranded);
-    expect(r.deadRegions.length).toBeGreaterThan(0);
+    const { ok, report } = verifyRoam(roamStranded);
+    expect(report.deadRegions.length).toBeGreaterThan(0);
+    expect(ok).toBe(false);
   });
 
   it('the timed reference game: an aligned bucket verifies, a misaligned one bites', () => {
     const story = roamExampleTimed.chapters[0].story;
-    const bucket = roamTimeThresholds(story).reduce((a, b) => { const g = (x: number, y: number): number => y === 0 ? x : g(y, x % y); return g(a, b); });
+    const bucket = roamTimeThresholds(story).reduce(gcd);
     expect(checkBucketAlignment(story, bucket)).toEqual([]);
-    const r = walkStateSpace(story, { timeBucket: bucket });
-    expect(r.indeterminate).toBe(false);
-    expect(r.deadRegions).toEqual([]);
+    expect(verifyRoam(story, { timeBucket: bucket }).ok).toBe(true);
+    // a misaligned bucket (not dividing a threshold) makes the gate fail
+    expect(verifyRoam(story, { timeBucket: bucket + 1 }).ok).toBe(false);
   });
 });
 ```
@@ -1343,6 +1471,8 @@ EOF
   - **Finiteness:** no unbounded `increment`/`decrement` (declare bounds) and no `adjust_resource` in a roam game (`ROAM_UNBOUNDED_HUB_WRITE`).
   - **The cap is a FAILURE in roam** (`indeterminate`): shrink the map or coarsen the bucket; an empty `softlocks`/`deadRegions` from a capped walk means nothing.
   - **`deadRegions`:** the co-reachability guarantee — no wander-region from which no ending is reachable.
+  - **Use `verifyRoam(story, { timeBucket })`** as the verify gate — it couples bucket-alignment + the walk + fail-on-(indeterminate/softlock/deadRegion/orphan ending). Do not hand-assemble `walkStateSpace` + `checkBucketAlignment` and risk forgetting one.
+  - **`valuesAtEndings` / `walkSeeded` are NOT roam-aware** (own raw-time key, silent cap) — do not use them to "verify" a roam game; they belong to the (fenced-off) multi-chapter carry path. Use `verifyRoam`/`walkStateSpace` for roam.
   - **v1 fence:** roam games are single-chapter (`ROAM_CARRY_UNVERIFIABLE`); declare `travel:'free'` on the chapter's own `story.profile`.
 
 - [ ] **Step 2: Verify the full suite + typecheck one final time**
@@ -1375,10 +1505,10 @@ EOF
 - `choose()` seam before the throw; hub test off `state.location` → Task 3 (`travelTo`, `hubLocation`). ✓
 - Finiteness proved (`ROAM_UNBOUNDED_HUB_WRITE`, adjust_resource + both clock modes + counted vars) → Task 5. ✓
 - Bucket alignment via `readsClock`, depletion subsumed, bucket = verification param → Task 5 (`roamTimeThresholds`/`checkBucketAlignment`). ✓
-- Co-reachability over the FULL edge set; `deadRegions`; reconvergent regression guard → Tasks 6, 8. ✓
-- capHit ⇒ INDETERMINATE-and-fail → Task 6 (`indeterminate`). ✓
+- Co-reachability over the FULL edge set; `deadRegions`; pure `coReachable` back-edge unit guard → Tasks 6, 8. ✓
+- capHit ⇒ INDETERMINATE-and-fail; `verifyRoam` safe gate → Task 6. ✓
 - Container fence (`ROAM_CARRY_UNVERIFIABLE`) + runtime-inheritance lint (`ROAM_CHAPTER_PROFILE_MISSING`) → Task 7. ✓
-- Travel-aware static linter + `RESERVED_CHOICE_ID` → Task 4. ✓
+- Travel-aware static linter (`computeReachable`/`NO_EXIT`/event-reach/**`timeBounds`**) + `RESERVED_CHOICE_ID` → Task 4. ✓
 - Structural + advisory lints (UNKNOWN_LOCATION/NO_HUB/MISSING_TIME/ASYMMETRIC_EDGE/HUB_IS_TERMINAL/GRAPH_IGNORED) → Task 5. ✓
 - `DEFAULT_PROFILE` gains `travel:'off'`; profile.test.ts updated; stale comment fixed → Task 1. ✓
 - Reference game (cross-location coupling + stranding fixture + reconvergent clean) → Task 8. ✓
@@ -1387,10 +1517,10 @@ EOF
 
 **2. Placeholder scan:** The only deferred specifics are in Task 8 (the authored prose and the exact `GameRunner.choose(...)` path), which is correct — authoring a narrative fixture is the task's creative work; its acceptance is pinned by concrete test assertions (clean lints, `deadRegions:[]`, the coupled `finalEndingId`). No `TODO`/"handle edge cases"/missing-code steps elsewhere.
 
-**3. Type consistency:** `Profile.travel?: 'off'|'free'` (Task 1) used identically in Tasks 2–7. `travelNodeEdges(story, profile)` (Task 2) consumed in Task 4. `keyOf(n, timeKey: number)` + `timeKeyFor` (Task 6) are internal and consistent. `WalkReport.deadRegions: string[]` / `indeterminate: boolean` (Task 6) asserted in Tasks 6 & 8. `lintTravel(story, profile)` / `roamTimeThresholds(story)` / `checkBucketAlignment(story, bucket)` (Task 5) consumed in Task 8. `resolveProfile` signature reused as-is. All consistent.
+**3. Type consistency:** `Profile.travel?: 'off'|'free'` (Task 1) used identically in Tasks 2–7. `travelHops`/`travelNodeEdges(story, profile)` (Task 2) consumed in Task 4 (`computeReachable` + `timeBounds`). `keyOf(n, timeKey: number)` + `timeKeyFor` (Task 6) are internal and consistent. `coReachable(Set, Map)` + `verifyRoam` + `WalkReport.deadRegions`/`indeterminate` (Task 6) asserted in Tasks 6 & 8. `lintTravel`/`roamTimeThresholds`/`checkBucketAlignment` (Task 5) consumed in Tasks 6 (`verifyRoam` imports `checkBucketAlignment`) & 8. `resolveProfile` signature reused as-is. `verifyRoam`/`coReachable` imported from the `../engine/stateSpaceWalk` submodule (not the barrel). All consistent.
 
 ---
 
 ## Execution Handoff
 
-This plan is heavy on verification surface (two soundness-critical tasks: 6 co-reachability, 5 finiteness). Recommend a **(lighter) Team gut-check of this plan** before building — the same step that caught real pre-code bugs on the heist and profile plans — then **subagent-driven execution** (it worked well for the profile build), reviewing between tasks, with extra scrutiny on Tasks 6 and 8 (the co-reachability edge-set correctness and the reconvergent-clean regression guard).
+Plan rev 2 (post Team gut-check) — all blocker/must-fix/should-fix findings folded in. The verification surface is still the risk (Tasks 6 co-reachability, 5 finiteness), now guarded by the pure `coReachable` back-edge unit test and the explicit reviewer gate on the edge-recording placement. Recommend **subagent-driven execution** (it worked well for the profile build), reviewing between tasks, with extra scrutiny on Task 6 (verify `edges.set` is OUTSIDE the visited-guard; verify the pure back-edge test passes) and Task 8 (the authored game lints clean and the `GameRunner` path is strengthened to assert `finalEndingId`).

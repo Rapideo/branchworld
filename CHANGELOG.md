@@ -9,13 +9,73 @@ taken before the first deliberate un-freeze.
 > Note: `package.json` `version` (`0.1.0`) is the npm package version and is intentionally *separate* from
 > the engine version line below.
 
+## engine v1.6 — the travel (free-roam) dimension (tag `engine-v1.6`, 2026-06-29)
+
+> **Tag `engine-v1.6`** marks the **second profile dimension**. Merged to `master` (`a610d25`, `--no-ff`; branch
+> `feature/travel-dimension` deleted). The first dimension built on the v1.5 profile framework; **opt-in and
+> behaviorally inert** (`travel:'off'` default — every existing game and all prior tests unchanged). The
+> **investigation** dimension opens next; the **D2 prototype corpus** follows (it now has the ≥2 dimensions it
+> needs). Pushed to `origin` at this tag.
+
+### The travel (free-roam) dimension (branch `feature/travel-dimension`, now merged)
+
+A second **profile dimension** `travel: 'off' | 'free'` (default `'off'`). When `'free'`, the engine wires the
+long-dormant `Location` graph (`connectedLocations` / `travelTimes` / `defaultNode`, shipped as type fields since
+v1.2 but never read) as a navigation layer, and verification switches to a **bounded-exhaustive roam mode** so the
+honesty guarantees (no softlocks, all endings reachable, no stranded regions) survive free-roam.
+
+### What landed
+
+- **Mechanic** (`src/engine/travel.ts`, wired into `engine.ts`) — at a location's `defaultNode` hub (keyed off
+  `state.location`, not a global node scan), `view()` injects one synthetic `__travel_<dest>` choice per
+  `connectedLocations` entry; `choose()` handles a `__travel_` id BEFORE its unknown-choice throw (pays
+  `travelTimes`, enters the dest hub). **Coexists** with authored `change_location` (additive; one-way/conditional
+  edges stay authored). Snapshot/restore unaffected (travel choices are derived, never persisted).
+- **Roam verification** (`src/engine/stateSpaceWalk.ts`) — finite roam keying (untimed drops time from the key,
+  timed buckets it); the walk records the **FULL forward edge set** and runs a **co-reachability** pass
+  (`deadRegions` = nodes from which no ending is reachable — the property free-roam actually needs, computed over
+  the edge set, NOT the spanning `parent` tree, which would false-positive reconvergent maps); `capHit` ⇒
+  `indeterminate` (a hard fail in roam). The `verifyRoam(story, { timeBucket })` gate couples bucket-alignment +
+  the walk + fail-on-(indeterminate/softlock/deadRegion/orphan ending) — its `ok===true` is a sound certificate on
+  its own (independent of whether the author ran the lints).
+- **Lints** — `ROAM_UNBOUNDED_HUB_WRITE` (finiteness: rejects `adjust_resource` + sign-aware unbounded
+  `increment`/`decrement`, both clock modes) and `ROAM_BUCKET_MISALIGNED` (verification-time, via the `readsClock`
+  predicate) in `src/engine/travelLint.ts`; the static linter (`computeReachable` / `NO_EXIT` / `timeBounds`) made
+  travel-aware; `RESERVED_CHOICE_ID`; graph lints
+  `TRAVEL_{UNKNOWN_LOCATION,NO_HUB,MISSING_TIME,ASYMMETRIC_EDGE,HUB_IS_TERMINAL,GRAPH_IGNORED}`.
+- **Container fence** (`src/container/lintGame.ts`) — `ROAM_CARRY_UNVERIFIABLE` (multi-chapter roam unsupported in
+  v1; single-chapter only) + `ROAM_CHAPTER_PROFILE_MISSING` (the engine reads `story.profile`, so a roam chapter
+  must declare `travel:'free'` itself, not merely inherit it from the game).
+- **Reference game** `src/container/roamExample.ts` — `roamExample` (untimed) / `roamExampleTimed` / `roamStranded`,
+  a real 3-location game ("The Three Halls") with **cross-location state coupling** (a key found in the library
+  gates the good ending reached at the vault) + a deliberate stranding fixture. Authoring guide
+  `docs/authoring/free-travel.md`.
+- **365 tests green, tsc clean, zero existing tests changed** (the opt-in inertness held branch-wide).
+
+### Process
+
+Built **subagent-driven** over a 9-task TDD plan (`docs/superpowers/plans/2026-06-28-travel-dimension.md`), each
+task + the whole branch reviewed (opus for the soundness-critical walker / lints + the final pass). The design was
+**twice Team-gut-checked** (spec → rev 3; plan → rev 2): the reviews caught two soundness bugs *inside* the rev-2
+fixes (co-reachability over the `parent` tree; an `adjust_resource`/`__roff_` finiteness hole) and a test that
+didn't actually guard the fix it was written for (replaced with a pure `coReachable` back-edge unit test). Spec
+`docs/superpowers/specs/2026-06-28-travel-dimension-design.md`.
+
+### Deferred (not in v1)
+
+- **Multi-chapter roam** (a roam chapter inside a cross-chapter carry) — fenced by `ROAM_CARRY_UNVERIFIABLE`; the
+  container-walk roam-parity build is gated on the D2 corpus (built when a real roam-in-a-carry game appears).
+- **`incompatiblePairs`** stays empty / corpus-gated (reframed as per-dimension *requirements*, not binary
+  forbids); the **investigation** dimension is the next engine work and the likely first real forbid.
+- Map UI, one-way roam-graph edges, travel-triggered encounters — see the spec's Out-of-scope.
+
 ## engine v1.5 — counted inventory + the profile framework (tag `engine-v1.5`, 2026-06-28)
 
 > **Tag `engine-v1.5`** marks the post-v1.4 engine line: **counted inventory** (`58526b6`) + the **profile
 > framework / clock dimension** (described below). Cut at `master` after the heist slice, the loud route, and the
-> container promotion (those are content/refactor, not engine changes). The next engine work — the `travel` /
-> `investigation` profile dimensions — opens the v1.6 line. Nothing pushed (local only); a `git bundle` backup
-> was taken at this tag.
+> container promotion (those are content/refactor, not engine changes). The next engine work — the `travel`
+> dimension — opened the **v1.6** line (above); `investigation` follows. Nothing pushed at the v1.5 tag (local
+> only); a `git bundle` backup was taken at this tag. (Pushing began at v1.6.)
 
 ### Profile framework + clock dimension (branch `feature/engine-profile`)
 

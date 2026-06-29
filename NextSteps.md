@@ -9,6 +9,35 @@
 > (the team + fuzzer pass) and [`ENGINE-ASSESSMENT.md`](src/experiments/sump-line/ENGINE-ASSESSMENT.md)
 > (the F1–F9 log). The authoring method is in [`docs/authoring-method.md`](docs/authoring-method.md).
 
+## Status — 2026-06-29 (Travel dimension shipped + pushed) — resume anchor
+
+**The `travel` (free-roam) dimension is SHIPPED + MERGED** to `master` (merge `a610d25`, `--no-ff`, tag
+**`engine-v1.6`**; branch `feature/travel-dimension` deleted; **pushed to `origin`**). The 2nd profile dimension
+`travel:'off'|'free'` (default off, behaviorally inert — **365 tests green, tsc clean, zero existing tests
+changed**). When `'free'`: hub-injected `__travel_<dest>` navigation over the `Location` graph, coexisting with
+authored `change_location`; a **bounded-exhaustive roam mode** (finite keying, full-edge
+co-reachability/`deadRegions`, `indeterminate`-on-cap) behind a single `verifyRoam` gate whose `ok===true` is a
+sound certificate; finiteness + bucket-alignment lints; a travel-aware static linter; the single-chapter container
+fence (`ROAM_CARRY_UNVERIFIABLE` / `ROAM_CHAPTER_PROFILE_MISSING`); and a reference game (`roamExample`). Spec
+`docs/superpowers/specs/2026-06-28-travel-dimension-design.md` (rev 3) + plan
+`docs/superpowers/plans/2026-06-28-travel-dimension.md` (rev 2) — both **twice Team-gut-checked** (each pass
+caught real soundness bugs pre-build); built **subagent-driven** (9 TDD tasks, opus reviews on the
+soundness-critical walker/lints + the final whole-branch pass). See CHANGELOG **engine v1.6**.
+
+**Engine-first call (Matthew, 2026-06-28): finish the two profile dimensions before the prototype corpus, so the
+prototypes use the complete feature set.** Travel is dimension 1 of 2.
+
+**NEXT, in order:**
+1. **The investigation dimension** — the 2nd and final profile dimension (its own spec → plan → build; the spec
+   flags it as the likely first real cross-dimension `incompatiblePairs` forbid — "exhaust every clue" sits
+   awkwardly under a hard deadline — to be settled empirically by the corpus).
+2. **The D2 prototype corpus** — 10–20 small games across compatible sets (now has the ≥2 dimensions it needs).
+3. **WS-G front-end** (after the engine dimensions).
+
+**Deferred:** multi-chapter roam (fenced by `ROAM_CARRY_UNVERIFIABLE`; the container-walk roam-parity build is
+gated on the D2 corpus) · long-horizon clock value + per-chapter scope · the untimed `add_minutes`/walker-key
+optimization · map UI / one-way roam edges / travel-triggered encounters.
+
 ## Status — 2026-06-28 (Profile framework + WS-D/D1 shipped) — resume anchor
 
 **WS-D/D1 DONE** on branch `feature/engine-profile`. The `clock` dimension of the profile framework is fully
@@ -180,8 +209,10 @@ for the project at hand (resources, scheduled events, multi-chapter carry, etc.)
 
 | Item | What | Size | Proposed priority |
 |---|---|---|---|
-| D1 | Define the toggle surface (which primitives are opt-in per `Story`/`Game`) and the lint profile per toggle. **✅ DONE** (2026-06-28, branch `feature/engine-profile`) — `clock` dimension shipped: `Profile` type, `clockDimension` validator, `resolveProfile`/`validateProfile`, presets, profile-aware lintStory + lintGame, both games stamped, untimed reference game, authoring guides. Deferred: long-horizon clock value, travel/investigation dimensions, `incompatiblePairs`, `add_minutes`/walker-key optimization. | M | **✅ DONE** |
-| D2 | **Prototype game corpus** (Matthew) — build **10–20 small "prototype" games** that each use a different combination of engine features / a different compatible set (timed survival, untimed branching, investigation, free-travel, long-horizon, etc.). Purpose: empirically prove the profile/compatible-sets framework, surface incompatibilities the validator must catch, and let the strongest combos graduate into shipped **presets** + their authoring guides. Each prototype declares a real `Game.profile`. | M–L | P2 |
+| D1 | Define the toggle surface (which primitives are opt-in per `Story`/`Game`) and the lint profile per toggle. **✅ DONE** (2026-06-28, branch `feature/engine-profile`) — `clock` dimension shipped: `Profile` type, `clockDimension` validator, `resolveProfile`/`validateProfile`, presets, profile-aware lintStory + lintGame, both games stamped, untimed reference game, authoring guides. | M | **✅ DONE** |
+| D1-travel | **The `travel` (free-roam) dimension** — `travel:'off'\|'free'`; hub-injected `__travel_<dest>` navigation over the `Location` graph + a bounded-exhaustive roam verifier (`verifyRoam`, co-reachability/`deadRegions`, finiteness + bucket lints, the single-chapter fence) + reference game + guide. | L | **✅ DONE** (2026-06-29, `engine-v1.6`, merge `a610d25`, pushed) |
+| D1-investigation | **The `investigation` dimension** — the 2nd/final profile dimension; clue-finding / scene-exploration ("exhaust every clue"). Likely the first real `incompatiblePairs` forbid (vs a hard deadline). Its own spec → plan → build. | M–L | **NEXT** |
+| D2 | **Prototype game corpus** (Matthew) — build **10–20 small "prototype" games** that each use a different combination of engine features / a different compatible set (timed survival, untimed branching, investigation, free-travel, long-horizon, etc.). Purpose: empirically prove the profile/compatible-sets framework, surface incompatibilities the validator must catch (and **decide the fate of `incompatiblePairs`** — kept only if the corpus surfaces a real forbid), and let the strongest combos graduate into shipped **presets** + their authoring guides. Each prototype declares a real `Game.profile`. **Sequenced AFTER both dimensions** (engine-first call). | M–L | P2 (after investigation) |
 
 ### WS-E — Tooling for book scale
 *Goal: the tools the method's backlog named, now re-ranked by the hardening pass. (Several overlap WS-A.)*

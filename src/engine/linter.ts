@@ -6,6 +6,7 @@ import { coerce } from './conditions';
 import { resolveProfile, validateProfile } from './profile';
 import { travelNodeEdges, travelHops } from './travel';
 import { lintTravel } from './travelLint';
+import { lintInvestigation } from './investigationLint';
 
 const RESERVED_FIELDS = new Set(['time', 'location']);
 const NON_VAR_EFFECT_OPS = new Set<Effect['op']>([
@@ -388,6 +389,10 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
   for (const i of validateProfile(story, inherited)) err(i.code, i.message, i.where);
 
   for (const i of lintTravel(story, profile)) {
+    if (i.level === 'error') errors.push(i); else warnings.push(i);
+  }
+
+  for (const i of lintInvestigation(story, profile)) {
     if (i.level === 'error') errors.push(i); else warnings.push(i);
   }
 

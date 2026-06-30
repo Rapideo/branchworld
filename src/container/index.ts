@@ -13,3 +13,4 @@ export * from './lintGameContracts';
 export * from './seededWalk';
 export { exampleGame } from './exampleGame';
 export { roamExample, roamExampleTimed, roamStranded } from './roamExample';
+export { investigationExample, investigationStudy, investigationStudyUntimed, investigationStudyUnreachable, investigationStudyEndsWith, bareChapterInvestigationGame } from './investigationExample';

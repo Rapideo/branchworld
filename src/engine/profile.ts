@@ -61,7 +61,16 @@ export const travelDimension: Dimension = {
   validate: () => [],
 };
 
-const DIMENSIONS: Dimension[] = [clockDimension, travelDimension];
+export const investigationDimension: Dimension = {
+  id: 'investigation',
+  values: ['off', 'on'],
+  default: 'off',
+  // Investigation's lints (fence + hygiene) live in investigationLint.ts, called from lintStory — the
+  // Dimension.validate hook is error-only and lacks lint context, same pattern as travel.
+  validate: () => [],
+};
+
+const DIMENSIONS: Dimension[] = [clockDimension, travelDimension, investigationDimension];
 
 // Derived from the dimensions' defaults so it can never drift from them.
 export const DEFAULT_PROFILE: Profile = Object.fromEntries(DIMENSIONS.map((d) => [d.id, d.default])) as unknown as Profile;

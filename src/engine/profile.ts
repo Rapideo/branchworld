@@ -28,6 +28,7 @@ function clockReadingHits(story: Story): { op: string; where: string }[] {
   for (const n of story.nodes) {
     scan(n.conditions, `node ${n.id}`);
     for (const ch of n.choices ?? []) scan(ch.conditions, `choice ${ch.id}`);
+    for (const ex of n.examinables ?? []) scan(ex.conditions, `examinable ${ex.id}`);
   }
   for (const ev of story.events) scan(ev.trigger, `event ${ev.id}`);
   for (const en of story.endings) scan(en.conditions, `ending ${en.id}`);

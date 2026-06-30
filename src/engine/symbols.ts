@@ -1,4 +1,4 @@
-import type { Story, Effect } from './types';
+import type { Story, Effect, Profile } from './types';
 
 export interface StorySymbols {
   producibleClues: Set<string>;
@@ -17,7 +17,7 @@ function allEffects(story: Story): Effect[] {
   return out;
 }
 
-export function collectSymbols(story: Story): StorySymbols {
+export function collectSymbols(story: Story, profile?: Profile): StorySymbols {
   const producibleClues = new Set<string>();
   const canBecomeTruthy = new Set<string>();
   const setValues = new Map<string, Set<string>>();
@@ -28,6 +28,10 @@ export function collectSymbols(story: Story): StorySymbols {
     if (d === true || (typeof d === 'number' && d !== 0) || (typeof d === 'string' && d !== '')) {
       canBecomeTruthy.add(v.name);
     }
+  }
+
+  if (profile?.investigation === 'on') {
+    for (const n of story.nodes) for (const ex of n.examinables ?? []) producibleClues.add(ex.clue);
   }
 
   for (const e of allEffects(story)) {

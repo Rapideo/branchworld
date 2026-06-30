@@ -9,6 +9,7 @@ import { buildBounds, type BoundsMap } from './bounds';
 import { applyResourceStep } from './resources';
 import { resolveProfile } from './profile';
 import { parseTravelDest, hubLocation, travelDests, travelTripEffects, destDefaultNode, travelChoiceId } from './travel';
+import { parseExamineTarget, examinablesAt, examineChoiceId, examineEffects } from './investigation';
 import type { Profile } from './types';
 
 export class GameEngine {
@@ -92,6 +93,11 @@ export class GameEngine {
         }
       }
     }
+    if (this.profile.investigation === 'on' && !this.ending) {
+      for (const ex of examinablesAt(n, this.state)) {
+        choices.push({ id: examineChoiceId(ex.id), label: ex.label, available: true });
+      }
+    }
     return {
       node: n,
       time: this.state.time,
@@ -108,6 +114,8 @@ export class GameEngine {
     if (this.ending) return this.view();
     const dest = parseTravelDest(choiceId);
     if (dest !== undefined) return this.travelTo(dest);
+    const exTarget = parseExamineTarget(choiceId);
+    if (exTarget !== undefined) return this.examine(exTarget);
     const n = this.node(this.currentId);
     const choice = (n.choices || []).find((c) => c.id === choiceId);
     if (!choice) throw new Error(`Unknown choice: ${choiceId}`);
@@ -116,6 +124,17 @@ export class GameEngine {
     }
     this.state = applyEffects(this.state, choice.effects, this.bounds);
     this.enter(choice.destination);
+    return this.view();
+  }
+
+  private examine(targetId: string): GameView {
+    if (this.profile.investigation !== 'on') throw new Error(`Investigation is off; cannot examine ${targetId}`);
+    const n = this.node(this.currentId);
+    const ex = examinablesAt(n, this.state).find((e) => e.id === targetId);
+    if (!ex) throw new Error(`No available examinable '${targetId}' at node ${this.currentId}`);
+    this.state = applyEffects(this.state, examineEffects(ex), this.bounds);
+    this.log.push(ex.reveal);
+    this.settle(this.currentId);  // run events/resources/deadline tail WITHOUT re-arriving the node
     return this.view();
   }
 

@@ -3,6 +3,8 @@ import { resolveEnding } from './endingResolver';
 import { evaluateConditions } from './conditions';
 import { resolveProfile } from './profile';
 import { checkBucketAlignment } from './travelLint';
+import { lintInvestigation } from './investigationLint';
+import { parseTime } from './time';
 import type { Story, GameView, LintIssue } from './types';
 
 const DEFAULT_CAP = 50_000;
@@ -21,6 +23,7 @@ export interface WalkReport {
   eventPresent: { eventId: string; ok: boolean }[]; // H8: the ifPresentNode is reached (as present) in some play
   conditionalChoices: string[]; // H12: choices available on some reachable branches and locked on others (`node::choice`)
   overlaps: { winner: string; shadowed: string[]; count: number }[];
+  satisfiedEndings: string[]; // non-default endings whose gate holds at some terminal reached WITHIN the deadline
 }
 
 interface WNode {
@@ -49,9 +52,9 @@ function keyOf(n: WNode, timeKey: number): string {
   });
 }
 
-// Effective time component: roam+untimed drops time (A<->A dedups); else raw, or bucketed when a bucket is given.
+// Effective time component: any untimed walk drops time (A<->A dedups); else raw, or bucketed when a bucket is given.
 function timeKeyFor(n: WNode, roam: boolean, untimed: boolean, timeBucket?: number): number {
-  if (roam && untimed) return 0;
+  if (untimed) return 0;   // untimed forbids clock-reading conditions, so nothing branches on time — drop it always
   const t = n.snap.state.time;
   return timeBucket ? Math.floor(t / timeBucket) : t;
 }
@@ -204,6 +207,23 @@ function findEndingAmbiguities(w: WalkResult) {
   return [...sig.values()];
 }
 
+function computeSatisfiedEndings(w: WalkResult): string[] {
+  // P0 (plan gut-check): only terminals reached WITHIN the deadline count. The engine resolves a state-matched
+  // win EVEN PAST the deadline (resolveEndingAt's state tier precedes the out-of-time tier, endingResolver.ts:
+  // 31-44), so a costly examine that crosses the deadline would otherwise farm a clue-holding past-deadline
+  // win-terminal and certify a game whose ONLY win is past the deadline. Boundary is <= (a win on the buzzer
+  // counts; strictly after does not). Untimed -> Infinity -> no terminal filtered (completable short-circuits anyway).
+  const deadline = w.story.deadline !== undefined ? parseTime(w.story.deadline) : Infinity;
+  const nonDefault = w.story.endings.filter((e) => !e.isDefault);
+  const sat = new Set<string>();
+  for (const t of w.terminals) {
+    if (t.snap.state.time > deadline) continue;
+    for (const e of nonDefault)
+      if (evaluateConditions(e.conditions, t.snap.state)) sat.add(e.id);
+  }
+  return [...sat];
+}
+
 function findDeadChoices(w: WalkResult): string[] {
   const dead: string[] = [];
   for (const n of w.story.nodes)
@@ -255,6 +275,7 @@ export function walkStateSpace(story: Story, opts?: { cap?: number; timeBucket?:
     eventPresent: computeEventPresent(w),
     conditionalChoices: [...w.choiceAvail.entries()].filter(([, v]) => v.available > 0 && v.locked > 0).map(([k]) => k).sort(),
     overlaps: findEndingAmbiguities(w),
+    satisfiedEndings: computeSatisfiedEndings(w),
   };
 }
 
@@ -269,3 +290,27 @@ export function verifyRoam(story: Story, opts?: { timeBucket?: number; cap?: num
     && report.softlocks.length === 0 && report.deadRegions.length === 0 && report.orphanEndings.length === 0;
   return { ok, report, bucketIssues };
 }
+
+export interface InvestigationVerifyResult { ok: boolean; report: WalkReport; issues: LintIssue[]; }
+
+/** The investigation verify gate. Walks the real engine (examination is walked for free), then certifies timed
+ *  completability on gate-SATISFACTION at a terminal (satisfiedEndings), never bare reachedEndings membership. */
+export function verifyInvestigation(story: Story, opts?: { cap?: number }): InvestigationVerifyResult {
+  const profile = resolveProfile(story);
+  const issues = lintInvestigation(story, profile);
+  const report = walkStateSpace(story, { cap: opts?.cap });
+  const clueGated = story.endings
+    .filter((e) => !e.isDefault && (e.conditions ?? []).some((c) => c.op === 'has_clue'))
+    .map((e) => e.id);
+  const satisfied = new Set(report.satisfiedEndings);
+  const completable = profile.clock !== 'timed' || clueGated.length === 0 || clueGated.some((id) => satisfied.has(id));
+  if (!completable && !report.capHit) {
+    issues.push(issueErr('INVESTIGATION_DEADLINE_UNREACHABLE',
+      `No clue-gated success ending is reachable with its clues within the deadline window [${story.startTime}, ${story.deadline}] — the examine costs likely exceed it`));
+  }
+  const ok = issues.filter((i) => i.level === 'error').length === 0
+    && !report.capHit && report.softlocks.length === 0 && completable;
+  return { ok, report, issues };
+}
+
+function issueErr(code: string, message: string): LintIssue { return { level: 'error', code, message }; }

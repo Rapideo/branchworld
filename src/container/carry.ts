@@ -1,5 +1,5 @@
-import { parseTime } from '../engine';
-import type { Story, Effect, WorldState, Primitive } from '../engine';
+import { parseTime, resolveProfile } from '../engine';
+import type { Story, Effect, WorldState, Primitive, Profile } from '../engine';
 import type { CarryContract, CarriedState } from './types';
 
 export function minutesToClock(min: number): string {
@@ -33,6 +33,7 @@ export function seedChapterStory(
   carry: CarriedState,
   gameElapsedMinutes: number,
   gameDeadlineMinutes?: number,
+  gameProfile?: Profile,
 ): Story {
   const s: Story = JSON.parse(JSON.stringify(story)) as Story;
 
@@ -58,6 +59,10 @@ export function seedChapterStory(
     const eff = Math.max(chapterStart, Math.min(parseTime(s.deadline), projected));
     s.deadline = minutesToClock(eff);
   }
+
+  // Stamp the RESOLVED profile so the engine (which reads only story.profile) honors inherited dimensions
+  // (travel/investigation) at runtime. Precedence: the chapter's own profile wins over the game profile.
+  s.profile = resolveProfile(story, gameProfile);
 
   return s;
 }

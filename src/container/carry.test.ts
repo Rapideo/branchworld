@@ -72,3 +72,21 @@ describe('seedChapterStory', () => {
     expect(seeded.deadline).toBe('2:00'); // min(120, 600) -> 120 = 02:00
   });
 });
+
+// ---------------------------------------------------------------------------
+// Profile stamp
+// ---------------------------------------------------------------------------
+const bareStory: Story = {
+  id: 's', title: 'S', startNodeId: 'a', startTime: '09:00', startLocation: 'L',
+  variables: [], nodes: [{ id: 'a', title: 'A', body: '', choices: [] }],
+  locations: [{ id: 'L', name: 'L' }], events: [], endings: [{ id: 'e', name: 'E', conditions: [], summary: '', isDefault: true }],
+  // NOTE: no profile declared on the story
+};
+
+describe('seedChapterStory profile stamp', () => {
+  it('stamps the resolved profile (inherited from the game) onto the seeded story', () => {
+    const seeded = seedChapterStory(bareStory, { vars: {}, clues: [], inventory: [] }, 0, undefined, { clock: 'timed', travel: 'free' });
+    expect(seeded.profile?.travel).toBe('free');
+    expect(seeded.profile?.clock).toBe('timed');
+  });
+});

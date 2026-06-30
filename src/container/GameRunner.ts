@@ -31,7 +31,7 @@ export class GameRunner {
     const ch = this.chapter(chapterId);
     this.currentChapterId = chapterId;
     this.carriedIn = carry;
-    const seeded = seedChapterStory(ch.story, carry, this.gameElapsedMinutes, this.game.gameDeadlineMinutes);
+    const seeded = seedChapterStory(ch.story, carry, this.gameElapsedMinutes, this.game.gameDeadlineMinutes, this.game.profile);
     this.engine = new GameEngine(seeded);
     this.settle();
   }
@@ -99,7 +99,7 @@ export class GameRunner {
     this.gameOver = false;
     this.finalEndingId = undefined;
     const ch = this.chapter(snap.currentChapterId);
-    const seeded = seedChapterStory(ch.story, snap.carriedIn, snap.gameElapsedMinutes, this.game.gameDeadlineMinutes);
+    const seeded = seedChapterStory(ch.story, snap.carriedIn, snap.gameElapsedMinutes, this.game.gameDeadlineMinutes, this.game.profile);
     this.engine = new GameEngine(seeded);
     this.engine.restore(snap.chapter);
   }

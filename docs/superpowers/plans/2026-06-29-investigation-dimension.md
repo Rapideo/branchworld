@@ -8,10 +8,12 @@
 
 **Tech Stack:** TypeScript (strict), Vitest, Node. Windows + Git Bash/PowerShell. No new dependencies.
 
+> **Rev 2 (2026-06-29)** — after a two-lens Team plan gut-check (code-correctness + test-efficacy/sequencing). Verdict CHANGE→fixed, no rewrite. Folded in: **(P0)** `computeSatisfiedEndings` filters terminals to `time <= deadline` — the engine resolves a state-matched win *past* the deadline, so the unfiltered version certified games whose only win is past the deadline (all four negatives went green-when-they-should-be-red); spec rev 3 carries the matching fix. **(P1)** `verifyInvestigation` is imported from `../engine/stateSpaceWalk` (off-barrel, like `verifyRoam`) — the barrel-export guidance was the travel-plan bug class. **(P1)** reference-game numbers re-set (15-min load-bearing + 20-min herring vs a 60-min window) so it lints clean *and* the herring is a real time cost. **(P1)** the `PROFILE_CHAPTER_CONFLICT` extension is **descoped** (an explicit chapter override is precedence-honored, not a conflict — flagging it would false-positive; spec rev 3 matches). Added tests: settle event-routing, `TYPE_MISMATCH`/`TIME_LITERAL` on examinable conditions, `EXAMINE_ON_TERMINAL_NODE`, the fence-through-`lintStory`, and the investigation runtime-stamp.
+
 ## Global Constraints
 
 - **TDD always:** failing test → run-it-fails → minimal impl → run-it-passes → commit. One behavior per test.
-- **Opt-in inertness:** `investigation:'off'` (every existing game) must stay **behaviorally inert** — nothing injected. Zero existing tests change except (a) `profile.test.ts` resolved-object assertions gain `investigation:'off'`, (b) any exact `statesExplored` assertion on an untimed game (Task 7's `timeKeyFor` change), (c) the retired `ROAM_CHAPTER_PROFILE_MISSING` test (Task 1).
+- **Opt-in inertness:** `investigation:'off'` (every existing game) must stay **behaviorally inert** — nothing injected. Zero existing tests change except (a) `profile.test.ts` resolved-object assertions gain `investigation:'off'`, and (b) the retired `ROAM_CHAPTER_PROFILE_MISSING` test (Task 1), converted to a positive "stamp resolves it" test. (Task 7's all-untimed `timeKeyFor` change is sound, but the only `statesExplored` assertion in the suite is *relational* on a **timed** story — so no count churn is expected.)
 - **Reserved prefix:** injected choice ids are `__examine_<id>`; the `__` prefix is already guarded by `RESERVED_CHOICE_ID` — do not re-add that machinery.
 - **Verify gate every task:** `npx tsc --noEmit` clean AND `npx vitest run` green before each commit.
 - **Naming:** `GameEngine.settle` (Task 3) is a *different method* from the existing `GameRunner.settle` (`GameRunner.ts:40`, chapter transitions) — they live in different classes; do not merge or rename either.
@@ -155,11 +157,11 @@ In `src/container/lintGame.ts`, delete lines 55-59 (the `// the engine reads onl
 
 - [ ] **Step 7: Update the retired-lint test → a positive "stamp resolves it" test**
 
-Run: `npx vitest run -t "ROAM_CHAPTER_PROFILE_MISSING"` to find the asserting test. Replace its assertion: a single-chapter game declaring `travel:'free'` ONLY in `game.profile` (bare chapter) must now **lint clean** (no `ROAM_CHAPTER_PROFILE_MISSING`) AND a `GameRunner` over it must inject a travel choice at the hub. Example assertion to add (adapt to the existing fixture):
+Run: `npx vitest run -t "ROAM_CHAPTER_PROFILE_MISSING"` to find the asserting test. Replace its assertion: a single-chapter game declaring `travel:'free'` ONLY in `game.profile` (bare chapter) must now **lint clean** (no `ROAM_CHAPTER_PROFILE_MISSING`) AND a `GameRunner` over it must inject a travel choice at the hub. **The fixture must have a real travel destination** — at least **two** connected locations with a `travelTimes` entry (the existing `roamChapterStory` has `connectedLocations: []`, so it injects NO `__travel_` choice even after the stamp; build a ≥2-location story or reuse `roamExample`'s map with the chapter profile stripped). Example assertion to add:
 
 ```ts
 it('a game-profile-only roam chapter now lints clean and roams at runtime (root profile stamp)', () => {
-  const game = makeSingleChapterRoamGameWithProfileOnlyOnGame(); // travel:'free' only on game.profile
+  const game = makeSingleChapterRoamGameWithProfileOnlyOnGame(); // travel:'free' only on game.profile; chapter has >=2 connected locations
   const r = lintGame(game);
   expect(r.errors.find((e) => e.code === 'ROAM_CHAPTER_PROFILE_MISSING')).toBeUndefined();
   const runner = new GameRunner(game);
@@ -308,7 +310,7 @@ Change `const DIMENSIONS: Dimension[] = [clockDimension, travelDimension];` to i
 
 Run: `npx vitest run src/engine/profile.test.ts` — failures will be exact-object assertions like `toEqual({ clock: 'timed', travel: 'off' })`. Update each to include `investigation: 'off'`.
 
-- [ ] **Step 8: Export from the barrel** `src/engine/index.ts` — add `Examinable` to the type exports and re-export the investigation helpers (mirror how `travel.ts` symbols are exported). Then `npx tsc --noEmit`.
+- [ ] **Step 8: Barrel** `src/engine/index.ts` — `Examinable` is exported automatically via the existing `export * from './types'` (verify it resolves). Do **NOT** barrel-export the `investigation.ts` helpers, nor (later) `lintInvestigation`/`verifyInvestigation`: like `travel.ts`/`travelLint.ts`/`stateSpaceWalk.ts`, those are imported from their submodules directly by their consumers (e.g. `roamExample.test.ts` does `import { verifyRoam } from '../engine/stateSpaceWalk'`). Then `npx tsc --noEmit`.
 
 - [ ] **Step 9: Full verify + commit**
 
@@ -438,6 +440,23 @@ describe('investigation engine', () => {
     const g = new GameEngine(study({ clock: 'untimed', investigation: 'on' }));
     g.choose('__examine_desk');
     expect(() => g.choose('__examine_desk')).toThrow();
+  });
+  it('a costly examine that fires a present ScheduledEvent routes the player out (settle event-routing)', () => {
+    const s: Story = {
+      id: 's', title: 'S', startNodeId: 'study', startTime: '09:00', deadline: '10:00', startLocation: 'L',
+      profile: { clock: 'timed', investigation: 'on' },
+      variables: [{ name: 'interrupted', type: 'boolean', default: false, purpose: 'x' }],
+      nodes: [
+        { id: 'study', title: '', body: '', examinables: [{ id: 'desk', label: 'Desk', clue: 'c', reveal: 'r', minutes: 30 }], choices: [{ id: 'leave', label: '', destination: 'study' }] },
+        { id: 'interrupt', title: '', body: '', entryEffects: [{ field: 'interrupted', op: 'set', value: 'true' }], choices: [{ id: 'x', label: '', destination: 'study' }] },
+      ],
+      locations: [{ id: 'L', name: 'L' }],
+      events: [{ id: 'knock', title: '', trigger: [{ field: 'time', op: 'time_after', value: '09:20' }], eventLocation: 'L', ifPresentNode: 'interrupt', ifAbsentEffects: [{ field: 'interrupted', op: 'set', value: 'true' }], recoveryNodeId: 'study' }],
+      endings: [{ id: 'end', name: 'E', conditions: [], summary: '', isDefault: true }],
+    };
+    const v = new GameEngine(s).choose('__examine_desk'); // +30 -> 09:30 >= 09:20: event fires PRESENT
+    expect(v.node.id).toBe('interrupt');                  // settle's routing branch did a full enter() of the routed node
+    expect(v.state.vars.interrupted).toBe(true);          // the routed node's entryEffects fired
   });
 });
 ```
@@ -578,6 +597,23 @@ describe('investigation static lints', () => {
       endings: [{ id: 'def', name: 'D', conditions: [], summary: '', isDefault: true }],
     }));
     expect(r.errors.find((e) => e.code === 'CLOCK_CANNOT_BITE')).toBeUndefined();
+  });
+  it('a numeric op on a string var inside an examinable condition trips TYPE_MISMATCH (checkCondTypes sweep)', () => {
+    const r = lintStory(mystery({
+      variables: [{ name: 'note', type: 'string', default: '', purpose: 'x' }],
+      nodes: [{ id: 'study', title: '', body: '', examinables: [{ id: 'd', label: '', clue: 'c', reveal: '', conditions: [{ field: 'note', op: 'gt', value: '3' }] }], choices: [{ id: 'x', label: '', destination: 'end_node' }] },
+               { id: 'end_node', title: '', body: '', choices: [], resolvesEnding: true }],
+      endings: [{ id: 'def', name: 'D', conditions: [], summary: '', isDefault: true }],
+    }));
+    expect(r.errors.find((e) => e.code === 'TYPE_MISMATCH')).toBeDefined();
+  });
+  it('an out-of-window time literal inside an examinable condition trips TIME_LITERAL_OUT_OF_RANGE (checkTimeLiterals sweep)', () => {
+    const r = lintStory(mystery({
+      nodes: [{ id: 'study', title: '', body: '', examinables: [{ id: 'd', label: '', clue: 'c', reveal: '', conditions: [{ field: 'time', op: 'time_after', value: '11:30' }] }], choices: [{ id: 'x', label: '', destination: 'end_node' }] },
+               { id: 'end_node', title: '', body: '', choices: [], resolvesEnding: true }],
+      endings: [{ id: 'def', name: 'D', conditions: [], summary: '', isDefault: true }],
+    }));
+    expect(r.errors.find((e) => e.code === 'TIME_LITERAL_OUT_OF_RANGE')).toBeDefined();
   });
 });
 ```
@@ -725,6 +761,14 @@ describe('lintInvestigation', () => {
     const s = story([{ id: 'a', label: '', clue: 'orphan', reveal: '' }], on); // no has_clue reads 'orphan'
     expect(lintInvestigation(s, s.profile).find((i) => i.code === 'EXAMINE_CLUE_UNUSED')).toBeDefined();
   });
+  it('warns EXAMINE_ON_TERMINAL_NODE for a hotspot on a resolvesEnding node', () => {
+    const s = story([{ id: 'a', label: '', clue: 'c', reveal: '' }], on, { resolvesEnding: true });
+    expect(lintInvestigation(s, s.profile).find((i) => i.code === 'EXAMINE_ON_TERMINAL_NODE')).toBeDefined();
+  });
+  it('the fence surfaces through lintStory (the canonical static gate, not just lintInvestigation)', () => {
+    const s = story([{ id: 'a', label: '', clue: 'c', reveal: '' }], { clock: 'untimed', investigation: 'on', travel: 'free' });
+    expect(lintStory(s).errors.find((e) => e.code === 'INVESTIGATION_WITH_TRAVEL_UNVERIFIED')).toBeDefined();
+  });
 });
 ```
 
@@ -811,9 +855,8 @@ git commit -F <msgfile>   # "feat(investigation): fence + hygiene lints (investi
 ### Task 7: Walker — `timeKeyFor` all-untimed, `satisfiedEndings`, `verifyInvestigation`
 
 **Files:**
-- Modify: `src/engine/stateSpaceWalk.ts` (`timeKeyFor`; `WalkReport.satisfiedEndings`; `computeSatisfiedEndings`; `verifyInvestigation`)
-- Modify: `src/engine/index.ts` (export `verifyInvestigation`, `InvestigationVerifyResult`)
-- Test: `src/engine/verifyInvestigation.test.ts` (new); possibly `src/container/untimedExample.test.ts` (state-count churn)
+- Modify: `src/engine/stateSpaceWalk.ts` (`timeKeyFor`; `WalkReport.satisfiedEndings`; `computeSatisfiedEndings`; `verifyInvestigation`) — `verifyInvestigation` is imported from this submodule, NOT barrel-exported (like `verifyRoam`)
+- Test: `src/engine/verifyInvestigation.test.ts` (new)
 
 **Interfaces:**
 - Consumes: `lintInvestigation` (Task 6), `resolveProfile`.
@@ -883,19 +926,27 @@ function timeKeyFor(n: WNode, roam: boolean, untimed: boolean, timeBucket?: numb
 }
 ```
 
-- [ ] **Step 4: Add `satisfiedEndings` to the report**
+- [ ] **Step 4: Add `satisfiedEndings` to the report (deadline-filtered — the plan-gut-check P0)**
 
-In `WalkReport`, add: `satisfiedEndings: string[]; // non-default endings whose conditions hold at some reached terminal`.
+In `WalkReport`, add: `satisfiedEndings: string[]; // non-default endings whose gate holds at some terminal reached WITHIN the deadline`.
 
-Add the helper near `findEndingAmbiguities`:
+Add `parseTime` to the existing `./time` import in `stateSpaceWalk.ts`, then add the helper near `findEndingAmbiguities`:
 
 ```ts
 function computeSatisfiedEndings(w: WalkResult): string[] {
+  // P0 (plan gut-check): only terminals reached WITHIN the deadline count. The engine resolves a state-matched
+  // win EVEN PAST the deadline (resolveEndingAt's state tier precedes the out-of-time tier, endingResolver.ts:
+  // 31-44), so a costly examine that crosses the deadline would otherwise farm a clue-holding past-deadline
+  // win-terminal and certify a game whose ONLY win is past the deadline. Boundary is <= (a win on the buzzer
+  // counts; strictly after does not). Untimed -> Infinity -> no terminal filtered (completable short-circuits anyway).
+  const deadline = w.story.deadline !== undefined ? parseTime(w.story.deadline) : Infinity;
   const nonDefault = w.story.endings.filter((e) => !e.isDefault);
   const sat = new Set<string>();
-  for (const t of w.terminals)
+  for (const t of w.terminals) {
+    if (t.snap.state.time > deadline) continue;
     for (const e of nonDefault)
       if (evaluateConditions(e.conditions, t.snap.state)) sat.add(e.id);
+  }
   return [...sat];
 }
 ```
@@ -941,14 +992,14 @@ Expected: PASS — including the P0 guard (the endsWith-pinned win is reached bu
 
 - [ ] **Step 7: Fix any untimed state-count churn**
 
-Run: `npx vitest run`. If an untimed game's test asserts an exact `statesExplored` (e.g. `untimedExample.test.ts`), the all-untimed time-drop may lower it — update the expected number. Confirm softlocks/orphans/endings assertions are unchanged. Export `verifyInvestigation` from `src/engine/index.ts`.
+Run: `npx vitest run`. The only `statesExplored` assertion in the suite is a *relational* one on a timed story (`stateSpaceWalk.test.ts`), unaffected by the all-untimed time-drop — expect no count update; behavior (softlocks/orphans/endings) is unchanged. **Do NOT barrel-export `verifyInvestigation`:** `stateSpaceWalk` is deliberately off the `../engine` barrel (like `verifyRoam`) — consumers import it from `../engine/stateSpaceWalk` directly.
 
 - [ ] **Step 8: Full verify + commit**
 
 Run: `npx tsc --noEmit` then `npx vitest run`. Expected: green.
 
 ```bash
-git add src/engine/stateSpaceWalk.ts src/engine/index.ts src/engine/verifyInvestigation.test.ts <any-updated-count-test>
+git add src/engine/stateSpaceWalk.ts src/engine/verifyInvestigation.test.ts
 git commit -F <msgfile>   # "feat(investigation): satisfiedEndings + verifyInvestigation; drop time for all untimed walks"
 ```
 
@@ -966,7 +1017,7 @@ git commit -F <msgfile>   # "feat(investigation): satisfiedEndings + verifyInves
 
 - [ ] **Step 1: Author the reference mystery** `src/container/investigationExample.ts`
 
-Build "The Locked Study": one location, one study node with four examinables (`debt_receipt`, `ledger_gap`, `safe_combo` load-bearing; `cigar_brand` red herring), two accusation choices (accuse the partner — gated on the three load-bearing clues; accuse the housekeeper — default/wrong), each routing to a `verdict` node that `resolvesEnding`. Endings: `accuse_partner` (priority 1, gates `has_clue(debt_receipt) && has_clue(ledger_gap) && has_clue(safe_combo)`), `wrong_accusation` (default). Timed variant: deadline `10:00` (60 min), each hotspot 10 min — examining all four = 40 min (fits), but the prose treats `cigar_brand` as a time-waster the player should skip. `profile: { clock: 'timed', investigation: 'on' }`. Write `reveal` text in 1–3 sentences each (it renders to the log). Provide the untimed variant (`clock:'untimed'`, no deadline, no minutes), the unreachable variant (each hotspot 30 min, deadline `10:00` → the 3 load-bearing clues need 90 min > 60), and the endsWith P0 variant (verdict node `endsWith:'accuse_partner'`, hotspots 30 min). Wrap the timed one as a single-chapter `Game` (`gameEnding: true`, `carry: { vars:'all', resources:[], clues:false, inventory:false }`, `profile: { clock:'timed', investigation:'on' }`).
+Build "The Locked Study": one location, one study node with four examinables (`debt_receipt`, `ledger_gap`, `safe_combo` load-bearing; `cigar_brand` red herring), two accusation choices (accuse the partner — gated on the three load-bearing clues; accuse the housekeeper — default/wrong), each routing to a `verdict` node that `resolvesEnding`. Endings: `accuse_partner` (priority 1, gates `has_clue(debt_receipt) && has_clue(ledger_gap) && has_clue(safe_combo)`), `wrong_accusation` (default). **Timed-variant numbers (must satisfy BOTH constraints, per the plan gut-check):** deadline `10:00` (60-min window); the three load-bearing hotspots **`15` min each** (so the win path = 45 + the 0-min accuse **≤ 60** → reachable IN TIME) and the red herring **`20` min** (so Σ all four = **65 ≥ 60** → the clock can bite, no false `CLOCK_CANNOT_BITE`, and examining the herring genuinely costs you the win). `profile: { clock: 'timed', investigation: 'on' }`. Write `reveal` text in 1–3 sentences each (it renders to the log). Provide: the **untimed** variant (`clock:'untimed'`, no deadline, no minutes); the **unreachable** variant (each load-bearing hotspot `30` min → collecting all three needs 90 > 60, the win is genuinely unreachable in time); and the **endsWith P0** variant (`30`-min hotspots AND the `verdict` node `endsWith:'accuse_partner'` — bare-membership completability would falsely pass via the pin, while `satisfiedEndings` + the deadline filter must still report `ok=false`). Wrap the timed one as a single-chapter `Game` (`gameEnding: true`, `carry: { vars:'all', resources:[], clues:false, inventory:false }`, `profile: { clock:'timed', investigation:'on' }`).
 
 - [ ] **Step 2: Write the integration tests** `src/container/investigationExample.test.ts`
 
@@ -974,8 +1025,9 @@ Build "The Locked Study": one location, one study node with four examinables (`d
 import { describe, it, expect } from 'vitest';
 import { GameRunner } from './GameRunner';
 import { lintGame } from './lintGame';
-import { lintStory, verifyInvestigation } from '../engine';
-import { investigationExample, investigationStudy, investigationStudyUntimed, investigationStudyUnreachable, investigationStudyEndsWith } from './investigationExample';
+import { lintStory } from '../engine';
+import { verifyInvestigation } from '../engine/stateSpaceWalk';   // submodule — NOT on the ../engine barrel (like verifyRoam)
+import { investigationExample, investigationStudy, investigationStudyUntimed, investigationStudyUnreachable, investigationStudyEndsWith, bareChapterInvestigationGame } from './investigationExample';
 
 describe('The Locked Study', () => {
   it('lints clean (story + game)', () => {
@@ -1002,8 +1054,16 @@ describe('The Locked Study', () => {
   it('the endsWith P0 fixture is NOT a false pass', () => {
     expect(verifyInvestigation(investigationStudyEndsWith).ok).toBe(false);
   });
+  it('a game-profile-only investigation chapter injects __examine_ at runtime (root profile stamp)', () => {
+    // bareChapterInvestigationGame: investigation:'on' ONLY on game.profile; the chapter story declares no profile.
+    // Proves Task 1's stamp closes the silent-failure class for investigation, not just travel.
+    const r = new GameRunner(bareChapterInvestigationGame());
+    expect(r.view().choices.some((c) => c.id.startsWith('__examine_'))).toBe(true);
+  });
 });
 ```
+
+(Export `bareChapterInvestigationGame` from `investigationExample.ts`: the timed `Game` but with the chapter's `story.profile` stripped and `investigation:'on'` left only on `game.profile`.)
 
 - [ ] **Step 3: Run — iterate authoring until green**
 
@@ -1046,7 +1106,7 @@ git commit -F <msgfile>   # "docs(investigation): authoring guide for scene exam
 
 ## Self-Review (completed during planning)
 
-- **Spec coverage:** dimension type/registration (T2), examinable mechanic + settle (T3/T4), the symbols + four-pass lint sweep + timeBounds fix (T5), the fence + hygiene lints (T6), satisfiedEndings completability + timeKeyFor + verifyInvestigation (T7), reference game + negatives + P0 guard (T8), guide + the seven author rules (T9), and the root-cause profile-stamp prior step (T1). Every rev-2 spec section maps to a task.
+- **Spec coverage:** dimension type/registration (T2), examinable mechanic + settle (T3/T4), the symbols + four-pass lint sweep + timeBounds fix (T5), the fence + hygiene lints (T6), satisfiedEndings completability + timeKeyFor + verifyInvestigation (T7), reference game + negatives + P0 guard (T8), guide + the seven author rules (T9), and the root-cause profile-stamp prior step (T1). Every rev-2/rev-3 spec section maps to a task, with **one deliberate descope** (confirmed in spec rev 3): the `PROFILE_CHAPTER_CONFLICT` extension is **not** built — an explicit chapter-level dimension override is precedence-honored, not a conflict, so flagging it would be a false-positive. `PROFILE_CHAPTER_CONFLICT` stays clock-only.
 - **Placeholder scan:** no TBD/TODO; every code step shows complete code.
 - **Type consistency:** `Examinable`/`examinablesAt`/`examineEffects`/`parseExamineTarget` (T2) are consumed verbatim in T4; `WalkReport.satisfiedEndings` (T7) is produced before `verifyInvestigation` reads it; `collectSymbols(story, profile?)` (T5) matches the reordered call. `GameEngine.settle` (T3) is the engine method; `GameRunner.settle` is left untouched.
 - **Known sequencing note:** T1 must land first (it touches shipped travel code and is the reason investigation writes no papering lint). T3 (settle refactor) must precede T4 (examine uses settle). T6 (lintInvestigation) must precede T7 (verifyInvestigation imports it).

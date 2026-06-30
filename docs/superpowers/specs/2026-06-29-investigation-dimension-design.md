@@ -173,13 +173,19 @@ game `ok` while the clue-gated win is unreachable-with-clues-in-time. So:
 - **The completability set** = non-default endings carrying at least one `has_clue` condition (derived from the
   gates already there — no new authoring surface, matching `DEAD_CLUE_REFERENCE`'s "read intent from the gates"
   approach).
-- **Certify on gate-satisfaction at the certifying terminal, not id-membership.** The walk derives a
-  **`satisfiedEndings`** set: an ending `E` is satisfied iff some reached **terminal** state actually passes
-  `evaluateConditions(E.conditions, terminal.state)` — re-evaluating the gate on the terminal, exactly the
-  pattern `findEndingAmbiguities` already uses (`stateSpaceWalk.ts:193-194`). This closes the `endsWith` leak:
-  the clueless terminal does not satisfy `E.conditions`, so it does not count. (Completeness — the reverse
-  direction — was verified clean: the state-match resolver path *does* evaluate conditions, so a genuinely
-  reachable clue-gated win is always found and certified.)
+- **Certify on gate-satisfaction at a terminal reached *within the deadline*, not id-membership.** The walk
+  derives a **`satisfiedEndings`** set: an ending `E` is satisfied iff some reached **terminal** state with
+  `state.time <= deadline` (untimed: no bound) actually passes `evaluateConditions(E.conditions, terminal.state)`
+  — re-evaluating the gate on the terminal, exactly the pattern `findEndingAmbiguities` already uses
+  (`stateSpaceWalk.ts:193-194`). This closes **two** leaks the plan gut-check surfaced: **(1)** the clueless
+  `endsWith` terminal does not satisfy `E.conditions`, so it does not count; **(2)** the
+  **`time <= deadline` filter** is load-bearing because the engine resolves a *state-matched* win even **past**
+  the deadline (`resolveEndingAt`'s state-match tier precedes the out-of-time tier, `endingResolver.ts:31-44`),
+  so a costly examine that crosses the deadline would otherwise farm a clue-holding past-deadline win-terminal and
+  yield a false all-clear on a game whose *only* win is past the deadline. The boundary is **`<=`** (a win
+  *on the buzzer* counts — the rev-2 honest-scope's "on the buzzer can still win"; a win strictly *after* does
+  not). (Completeness — the reverse direction — was verified clean: the state-match resolver path *does* evaluate
+  conditions, so a genuinely reachable in-time clue-gated win is always found and certified.)
 - **Completable** iff the set is empty (nothing to prove) **or** `clueGatedSet ∩ satisfiedEndings ≠ ∅`.
 - **`INVESTIGATION_DEADLINE_UNREACHABLE` (error)** fires when the set is non-empty and **no** member is satisfied
   on a complete walk — i.e. no clue-gated success is reachable-with-its-clues in time. The message names the
@@ -327,12 +333,14 @@ error** — the exact silent-failure travel hit, which travel papered over with 
 - **A prior, separate, container-only step (before this build): `seedChapterStory` stamps the resolved profile** —
   `s.profile = resolveProfile(story, game.profile)`, with `GameRunner.startChapter` passing `game.profile` down.
   Zero engine change (the engine keeps reading `story.profile`; the container just stamps the *right* one). This
-  removes the silent-failure class **structurally for all dimensions at once**. Because it makes
-  `ROAM_CHAPTER_PROFILE_MISSING` flag a now-working config, that lint is **repurposed**: extend the existing
-  `PROFILE_CHAPTER_CONFLICT` check (`lintGame.ts:37-43`) to all dimensions, firing only on a genuine *explicit*
-  `'on'`-vs-`'off'` chapter override. This touches shipped travel lints/tests, which is exactly why it is its own
-  step *before* the investigation branch (cleaner to review in isolation). **Investigation then writes zero
-  `*_CHAPTER_PROFILE_MISSING` lints.**
+  removes the silent-failure class **structurally for all dimensions at once**, so `ROAM_CHAPTER_PROFILE_MISSING`
+  is now obsolete and is **deleted** (the stamp makes a game-profile-only roam chapter work at runtime). It is
+  **not** replaced by a `PROFILE_CHAPTER_CONFLICT` extension: an explicit chapter-level dimension override that
+  differs from the game profile is *honored* by `resolveProfile` precedence (chapter wins) — a deliberate choice,
+  not a conflict, so flagging it would be a false-positive. (`PROFILE_CHAPTER_CONFLICT` stays clock-only — v1's
+  uniform-clock constraint is a real requirement; travel/investigation have no uniform-dimension requirement.)
+  This step touches shipped travel lints/tests, which is exactly why it is its own step *before* the investigation
+  branch (cleaner to review in isolation). **Investigation then writes zero `*_CHAPTER_PROFILE_MISSING` lints.**
 
 **No carry fence is needed.** Unlike roam, standalone investigation is single-chapter-*free*: clues are already a
 carried primitive (`carry.clues`), examination is finite per-chapter, and nothing in the examine loop touches the
@@ -424,9 +432,10 @@ cross-chapter verification path. Multi-chapter investigation is **supported**.
   **indeterminate → fail**, not a clean pass.
 - **The fence** — `INVESTIGATION_WITH_TRAVEL_UNVERIFIED` bites on a story resolving to both dimensions on; an
   investigation-only and a travel-only game each lint clean (no false positive on the supported shapes).
-- **The container profile-missing lint** — `INVESTIGATION_CHAPTER_PROFILE_MISSING` bites on an
-  `investigation:'on'` game with a bare chapter; a correctly-stamped multi-chapter investigation game lints
-  clean (multi-chapter investigation is supported).
+- **The root profile-stamp works for investigation** — a `Game` declaring `investigation:'on'` only on
+  `game.profile` with a **bare** chapter now injects `__examine_` at runtime (the `seedChapterStory` stamp), and
+  lints clean — there is **no** `INVESTIGATION_CHAPTER_PROFILE_MISSING` (the prior step's root fix replaces it).
+  A multi-chapter investigation game lints clean (multi-chapter investigation is supported).
 - **Backward-compat** — `investigation:'off'` (cave, heist, the untimed/roam examples) is **behaviorally
   inert**: nothing injected, the engine runs as today. `profile.test.ts` resolved-object assertions updated to
   include `investigation:'off'`. **One expected, sound churn:** extending the `timeKeyFor` time-drop to all

@@ -9,13 +9,62 @@ taken before the first deliberate un-freeze.
 > Note: `package.json` `version` (`0.1.0`) is the npm package version and is intentionally *separate* from
 > the engine version line below.
 
+## engine v1.7 — the investigation (scene-examination) dimension (tag `engine-v1.7`, 2026-07-01)
+
+> **Tag `engine-v1.7`** marks the **third profile dimension** — the second of the two the engine-first call
+> finished before the **D2 prototype corpus** (which is next; it now has both dimensions). Merged to `master`
+> (`5984f79`, `--no-ff`; branch `feature/investigation-dimension` deleted). **Opt-in and behaviorally inert**
+> (`investigation:'off'` default — every existing game and all prior tests unchanged; **398 tests green**). Pushed
+> to `origin` at this tag.
+
+### The investigation (scene-examination) dimension (branch `feature/investigation-dimension`, now merged)
+
+A third **profile dimension** `investigation: 'off' | 'on'` (default `'off'`). When `'on'`, the engine turns the
+existing clue primitive into a first-class **examine loop**: a node declares `examinables` (hotspots), and the
+engine injects one-shot `__examine_<id>` choices that yield a clue + optional time cost and self-hide once the clue
+is held — so scene-exploration is engine-run, not hand-wired.
+
+### What landed
+
+- **Mechanic** (`src/engine/investigation.ts`, wired into `engine.ts`) — `view()` injects one `__examine_<id>`
+  choice per available hotspot (available iff `!has_clue(clue)` and its conditions pass), appended after authored +
+  travel choices; `choose()` handles a `__examine_` id BEFORE its unknown-choice throw. Taking one applies
+  `add_clue` + optional `add_minutes`, logs the reveal, and **settles in place** — `enter()`'s post-arrival tail was
+  factored into a reusable `settle()` so a costly examine still fires the deadline/resource/scheduled-event tail
+  (and a present event can route the player out) without re-arriving the node. Snapshot/restore unaffected.
+- **The completability certificate** (`src/engine/stateSpaceWalk.ts`) — the walker rides the real engine, so
+  examination is verified for free (no walker mode, no bucketing: examine is monotonic + self-hiding). Under
+  `clock:'timed'`, `verifyInvestigation(story)` proves a clue-gated success ending is genuinely reachable **within
+  the deadline**: `satisfiedEndings` counts an ending only when a within-deadline terminal **actually resolves** to
+  it AND its clue-conditions hold there — closing both a past-deadline state-win leak (the engine resolves a
+  state-match past the buzzer) and an `endsWith`-pin leak. `INVESTIGATION_DEADLINE_UNREACHABLE` on failure; `capHit`
+  ⇒ fail. `timeKeyFor` now drops time for **all** untimed walks (the long-deferred untimed key optimization; sound
+  because untimed forbids every time-reading mechanism).
+- **Lints** (`src/engine/investigationLint.ts`) — the v1 fence `INVESTIGATION_WITH_TRAVEL_UNVERIFIED` (error) +
+  hygiene (`EXAMINE_{DUPLICATE_HOTSPOT,EMPTY_CLUE,ON_TERMINAL_NODE,CLUE_UNUSED}`, `INVESTIGATION_MINUTES_UNTIMED`,
+  `EXAMINABLES_IGNORED`); the static linter made examinable-aware (profile-gated clue symbols so
+  `DEAD_CLUE_REFERENCE` stays sound when off; the four condition sweeps + `timeBounds` count examine minutes).
+- **Root-cause container fix** — `seedChapterStory` now stamps the resolved profile (`resolveProfile(story,
+  game.profile)`), so chapters inherit the game profile at runtime; this **retires `ROAM_CHAPTER_PROFILE_MISSING`**
+  and closes the silent-failure class for **all** dimensions (investigation writes zero papering lints).
+- **Reference game + guide** — `src/container/investigationExample.ts` ("The Locked Study": a timed micro-mystery
+  with two suspects, a costed red herring, and negative/`endsWith` P0 fixtures) + `docs/authoring/investigation.md`.
+- **Process** — built subagent-driven (9 TDD tasks + a fix wave). Spec 5-lens Team deep-dived (rev 3) and plan
+  2-lens gut-checked (rev 2), both catching real pre-code P0s in the completability certificate's soundness; each
+  task spec+quality reviewed, the certificate + fix opus-reviewed; the whole-branch review returned ready-to-merge.
+
+### Fence + deferred (v1)
+- `investigation` + `travel` fenced (`INVESTIGATION_WITH_TRAVEL_UNVERIFIED`) — the roam-mystery combo is corpus-gated.
+- Deferred: `revealNode` routing, explicit `required:` contracts, clue combination/deduction, an `all_examined`
+  predicate — all corpus-gated.
+
 ## engine v1.6 — the travel (free-roam) dimension (tag `engine-v1.6`, 2026-06-29)
 
 > **Tag `engine-v1.6`** marks the **second profile dimension**. Merged to `master` (`a610d25`, `--no-ff`; branch
 > `feature/travel-dimension` deleted). The first dimension built on the v1.5 profile framework; **opt-in and
 > behaviorally inert** (`travel:'off'` default — every existing game and all prior tests unchanged). The
-> **investigation** dimension opens next; the **D2 prototype corpus** follows (it now has the ≥2 dimensions it
-> needs). Pushed to `origin` at this tag.
+> **investigation** dimension shipped next (**v1.7**); the **D2 prototype corpus** follows (it now has the ≥2
+> dimensions it needs). Pushed to `origin` at this tag.
 
 ### The travel (free-roam) dimension (branch `feature/travel-dimension`, now merged)
 

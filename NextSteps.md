@@ -9,6 +9,39 @@
 > (the team + fuzzer pass) and [`ENGINE-ASSESSMENT.md`](src/experiments/sump-line/ENGINE-ASSESSMENT.md)
 > (the F1–F9 log). The authoring method is in [`docs/authoring-method.md`](docs/authoring-method.md).
 
+## Status — 2026-07-01 (Investigation dimension shipped + pushed) — resume anchor
+
+**The `investigation` (scene-examination) dimension is SHIPPED + MERGED** to `master` (merge `5984f79`, `--no-ff`,
+tag **`engine-v1.7`**; branch `feature/investigation-dimension` deleted; **pushed to `origin`**). The 3rd profile
+dimension `investigation:'off'|'on'` (default off, behaviorally inert — **398 tests green, tsc clean, zero existing
+tests changed**). When `'on'`: a node's `examinables` (hotspots) become engine-injected one-shot `__examine_<id>`
+choices that yield a clue + optional time cost and self-hide on `!has_clue`; `enter()`'s tail was factored into a
+reusable `settle()` so a costly examine fires the deadline/event/resource tail (and can route the player out) in
+place. The timed **completability certificate** `verifyInvestigation` proves a clue-gated win is reachable *within
+the deadline* — `satisfiedEndings` counts an ending only when a within-deadline terminal ACTUALLY resolves to it
+AND its clue-gate holds (closing a past-deadline state-win leak + an `endsWith`-pin leak). Fence
+`INVESTIGATION_WITH_TRAVEL_UNVERIFIED` (roam-mystery corpus-gated). **Root-cause container fix:** `seedChapterStory`
+now stamps the resolved profile — retiring `ROAM_CHAPTER_PROFILE_MISSING` and closing the silent-failure class for
+*all* dimensions. Reference game `investigationExample` ("The Locked Study") + guide `docs/authoring/investigation.md`.
+Spec `docs/superpowers/specs/2026-06-29-investigation-dimension-design.md` (rev 3, **5-lens Team deep-dive**) + plan
+`docs/superpowers/plans/2026-06-29-investigation-dimension.md` (rev 2, **2-lens gut-check**) — both caught real
+pre-code P0s in the certificate's soundness; built **subagent-driven** (9 TDD tasks + a fix wave; opus reviews on
+the certificate + the whole-branch pass). See CHANGELOG **engine v1.7**.
+
+**Both profile dimensions are now DONE (travel + investigation).** The engine-first call is satisfied.
+
+**NEXT, in order:**
+1. **The D2 prototype corpus** — 10–20 small games across compatible sets (now has both profile dimensions +
+   clock). Also the empirical decider for `incompatiblePairs`: investigation + a hard deadline turned out to be
+   *verify-and-permit* (not a forbid), so `incompatiblePairs` stays empty and is **kept only if the corpus surfaces
+   a real forbid**.
+2. **WS-G front-end** — the native-mobile player over the proven `GameRunner`.
+
+**Deferred (investigation):** `investigation` + `travel` (the roam mystery, fenced by
+`INVESTIGATION_WITH_TRAVEL_UNVERIFIED`) · `revealNode` routing · explicit `required:` contracts · clue
+combination/deduction · an `all_examined` predicate — all corpus-gated. **Deferred (prior):** multi-chapter roam ·
+long-horizon clock + per-chapter scope · map UI / one-way roam edges / travel-triggered encounters.
+
 ## Status — 2026-06-29 (Travel dimension shipped + pushed) — resume anchor
 
 **The `travel` (free-roam) dimension is SHIPPED + MERGED** to `master` (merge `a610d25`, `--no-ff`, tag
@@ -211,7 +244,7 @@ for the project at hand (resources, scheduled events, multi-chapter carry, etc.)
 |---|---|---|---|
 | D1 | Define the toggle surface (which primitives are opt-in per `Story`/`Game`) and the lint profile per toggle. **✅ DONE** (2026-06-28, branch `feature/engine-profile`) — `clock` dimension shipped: `Profile` type, `clockDimension` validator, `resolveProfile`/`validateProfile`, presets, profile-aware lintStory + lintGame, both games stamped, untimed reference game, authoring guides. | M | **✅ DONE** |
 | D1-travel | **The `travel` (free-roam) dimension** — `travel:'off'\|'free'`; hub-injected `__travel_<dest>` navigation over the `Location` graph + a bounded-exhaustive roam verifier (`verifyRoam`, co-reachability/`deadRegions`, finiteness + bucket lints, the single-chapter fence) + reference game + guide. | L | **✅ DONE** (2026-06-29, `engine-v1.6`, merge `a610d25`, pushed) |
-| D1-investigation | **The `investigation` dimension** — the 2nd/final profile dimension; clue-finding / scene-exploration ("exhaust every clue"). Likely the first real `incompatiblePairs` forbid (vs a hard deadline). Its own spec → plan → build. | M–L | **NEXT** |
+| D1-investigation | **The `investigation` dimension** — `investigation:'off'\|'on'`; engine-injected `__examine_<id>` hotspots (self-hiding on `!has_clue`) + the timed completability certificate `verifyInvestigation` (resolved-ending, deadline-filtered `satisfiedEndings`) + the `INVESTIGATION_WITH_TRAVEL_UNVERIFIED` fence + the root-cause profile-stamp + reference game/guide. | M–L | **✅ DONE** (2026-07-01, `engine-v1.7`, merge `5984f79`, pushed) |
 | D2 | **Prototype game corpus** (Matthew) — build **10–20 small "prototype" games** that each use a different combination of engine features / a different compatible set (timed survival, untimed branching, investigation, free-travel, long-horizon, etc.). Purpose: empirically prove the profile/compatible-sets framework, surface incompatibilities the validator must catch (and **decide the fate of `incompatiblePairs`** — kept only if the corpus surfaces a real forbid), and let the strongest combos graduate into shipped **presets** + their authoring guides. Each prototype declares a real `Game.profile`. **Sequenced AFTER both dimensions** (engine-first call). | M–L | P2 (after investigation) |
 
 ### WS-E — Tooling for book scale

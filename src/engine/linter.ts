@@ -6,6 +6,7 @@ import { coerce } from './conditions';
 import { resolveProfile, validateProfile } from './profile';
 import { travelNodeEdges, travelHops } from './travel';
 import { lintTravel } from './travelLint';
+import { lintInvestigation } from './investigationLint';
 
 const RESERVED_FIELDS = new Set(['time', 'location']);
 const NON_VAR_EFFECT_OPS = new Set<Effect['op']>([
@@ -76,21 +77,22 @@ function timeBounds(story: Story, hops: Map<string, { dest: string; minutes: num
   const byId = new Map(story.nodes.map((n) => [n.id, n]));
   let maxTime = 0;
   let minTime = Infinity;
-  const dfs = (id: string, acc: number, path: Set<string>): void => {
+  const dfs = (id: string, acc: number, accMax: number, path: Set<string>): void => {
     const n = byId.get(id);
     const choices = n?.choices ?? [];
     const travel = hops.get(id) ?? [];
+    const examineMin = (n?.examinables ?? []).reduce((a, e) => a + (e.minutes ?? 0), 0);
     if (!n || n.resolvesEnding || (choices.length === 0 && travel.length === 0) || path.has(id)) {
-      maxTime = Math.max(maxTime, acc);
+      maxTime = Math.max(maxTime, accMax + examineMin);
       minTime = Math.min(minTime, acc);
       return;
     }
     const np = new Set(path);
     np.add(id);
-    for (const c of choices) dfs(c.destination, acc + choiceMinutes(c), np);
-    for (const h of travel) dfs(h.dest, acc + h.minutes, np);
+    for (const c of choices) dfs(c.destination, acc + choiceMinutes(c), accMax + examineMin + choiceMinutes(c), np);
+    for (const h of travel) dfs(h.dest, acc + h.minutes, accMax + examineMin + h.minutes, np);
   };
-  dfs(story.startNodeId, 0, new Set());
+  dfs(story.startNodeId, 0, 0, new Set());
   if (minTime === Infinity) minTime = 0;
   return { maxTime, minTime };
 }
@@ -109,8 +111,8 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
   // resource ids are valid effect/condition targets — add them so checkConds/checkEffs don't UNDEFINED_VAR them
   for (const r of story.resources ?? []) varNames.add(r.id);
   const itemVars = new Set(story.variables.filter((v) => v.kind === 'item').map((v) => v.name));
-  const sym = collectSymbols(story);
   const profile = resolveProfile(story, inherited);
+  const sym = collectSymbols(story, profile);
   const travelEdges = travelNodeEdges(story, profile);
   const hops = travelHops(story, profile);
 
@@ -190,6 +192,7 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
       checkConds(c.conditions, c.id);
       checkEffs(c.effects, c.id);
     }
+    for (const ex of n.examinables ?? []) checkConds(ex.conditions, `${n.id}:examine:${ex.id}`);
   }
   for (const ev of story.events) {
     checkConds(ev.trigger, ev.id);
@@ -214,6 +217,7 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
   for (const n of story.nodes) {
     checkCondTypes(n.conditions, n.id);
     for (const c of n.choices || []) checkCondTypes(c.conditions, c.id);
+    for (const ex of n.examinables ?? []) checkCondTypes(ex.conditions, `${n.id}:examine:${ex.id}`);
   }
   for (const ev of story.events) checkCondTypes(ev.trigger, ev.id);
   for (const en of story.endings) checkCondTypes(en.conditions, en.id);
@@ -253,6 +257,7 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
   for (const n of story.nodes) {
     checkTimeDeltas(n.entryEffects, n.id);
     for (const c of n.choices || []) checkTimeDeltas(c.effects, `${n.id}:${c.id}`);
+    for (const ex of n.examinables ?? []) if (ex.minutes !== undefined) checkTimeDeltas([{ field: 'time', op: 'add_minutes', value: String(ex.minutes) }], `${n.id}:examine:${ex.id}`);
   }
   for (const ev of story.events) checkTimeDeltas(ev.ifAbsentEffects, ev.id);
 
@@ -360,6 +365,7 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
     for (const n of story.nodes) {
       checkTimeLiterals(n.conditions, n.id);
       for (const c of n.choices || []) checkTimeLiterals(c.conditions, c.id);
+      for (const ex of n.examinables ?? []) checkTimeLiterals(ex.conditions, `${n.id}:examine:${ex.id}`);
     }
     for (const ev of story.events) checkTimeLiterals(ev.trigger, ev.id);
     for (const en of story.endings) checkTimeLiterals(en.conditions, en.id);
@@ -383,6 +389,10 @@ export function lintStory(story: Story, inherited?: Profile): LintResult {
   for (const i of validateProfile(story, inherited)) err(i.code, i.message, i.where);
 
   for (const i of lintTravel(story, profile)) {
+    if (i.level === 'error') errors.push(i); else warnings.push(i);
+  }
+
+  for (const i of lintInvestigation(story, profile)) {
     if (i.level === 'error') errors.push(i); else warnings.push(i);
   }
 

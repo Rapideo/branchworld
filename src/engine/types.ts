@@ -37,6 +37,15 @@ export type NodeType =
   | 'scene' | 'conversation' | 'event' | 'discovery'
   | 'transition' | 'ending' | 'system' | 'location';
 
+export interface Examinable {
+  id: string;                 // hotspot id; injected choice is `__examine_<id>`
+  label: string;              // "Search the desk"
+  clue: string;               // the clue added when taken
+  reveal: string;             // prose surfaced (to the log) when taken
+  minutes?: number;           // optional time cost; meaningful only under clock:'timed' (monotonic, >= 0)
+  conditions?: Condition[];   // optional extra gate
+}
+
 export interface StoryNode {
   id: string;
   title: string;
@@ -46,6 +55,7 @@ export interface StoryNode {
   conditions?: Condition[];     // availability (used for location-based selection later)
   entryEffects?: Effect[];
   choices: Choice[];
+  examinables?: Examinable[];
   resolvesEnding?: boolean;     // entering this node triggers the ending resolver
   endsWith?: string;            // A3/F8: resolve directly to this ending id (node-named), overriding the state resolver
   authorTimeHint?: string;      // editor-only; engine never reads this for logic
@@ -118,7 +128,7 @@ export type ClockMode = 'timed' | 'untimed'; // 'long-horizon' reserved as a fut
 export interface Profile {
   clock: ClockMode;
   travel?: 'off' | 'free'; // free-roam navigation over the Location graph; default 'off'
-  // future dimensions slot in here as OPTIONAL fields: investigation?: 'off' | 'on'; …
+  investigation?: 'off' | 'on'; // scene examination; default 'off'
 }
 
 export interface Story {

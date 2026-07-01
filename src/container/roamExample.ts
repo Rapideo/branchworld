@@ -20,7 +20,8 @@
  *   ✓  Symmetric connectedLocations and travelTimes on both sides of every edge
  *   ✓  No hub node has resolvesEnding (avoids TRAVEL_HUB_IS_TERMINAL warning)
  *   ✓  No authored choice id starts with '__' (reserved for engine-injected travel choices)
- *   ✓  story.profile declares travel:'free' directly (ROAM_CHAPTER_PROFILE_MISSING guard)
+ *   ✓  story.profile declares travel:'free' directly (recommended for clarity; the resolved game
+ *      profile is also stamped onto the chapter at runtime by seedChapterStory)
  */
 
 import type { Story } from '../engine';

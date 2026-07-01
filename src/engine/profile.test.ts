@@ -46,9 +46,9 @@ describe('profile — the clock dimension validator', () => {
     expect(validateProfile(s).map((i) => i.code)).toContain('PROFILE_UNTIMED_HAS_TIME_CONDITION');
   });
   it('resolveProfile normalizes; the story profile wins, the inherited fills the gap', () => {
-    expect(resolveProfile(timedStory())).toEqual({ clock: 'timed', travel: 'off' });                                   // default
-    expect(resolveProfile(timedStory(), UNTIMED_BRANCHING)).toEqual({ clock: 'untimed', travel: 'off' });              // inherited fills
-    expect(resolveProfile({ ...timedStory(), profile: { clock: 'timed' } }, UNTIMED_BRANCHING)).toEqual({ clock: 'timed', travel: 'off' }); // story wins
+    expect(resolveProfile(timedStory())).toEqual({ clock: 'timed', travel: 'off', investigation: 'off' });                                   // default
+    expect(resolveProfile(timedStory(), UNTIMED_BRANCHING)).toEqual({ clock: 'untimed', travel: 'off', investigation: 'off' });              // inherited fills
+    expect(resolveProfile({ ...timedStory(), profile: { clock: 'timed' } }, UNTIMED_BRANCHING)).toEqual({ clock: 'timed', travel: 'off', investigation: 'off' }); // story wins
   });
   it('a timed story (default profile) with no deadline raises PROFILE_TIMED_NEEDS_DEADLINE', () => {
     const s: Story = { id: 'x', title: 'X', startNodeId: 'a', startTime: '00:00', startLocation: 'L',
@@ -58,9 +58,9 @@ describe('profile — the clock dimension validator', () => {
     expect(validateProfile(s).map((i) => i.code)).toContain('PROFILE_TIMED_NEEDS_DEADLINE');
   });
   it('travel dimension: default is off and appears in the resolved profile', () => {
-    expect(DEFAULT_PROFILE).toEqual({ clock: 'timed', travel: 'off' });
-    expect(resolveProfile(timedStory())).toEqual({ clock: 'timed', travel: 'off' });
+    expect(DEFAULT_PROFILE).toEqual({ clock: 'timed', travel: 'off', investigation: 'off' });
+    expect(resolveProfile(timedStory())).toEqual({ clock: 'timed', travel: 'off', investigation: 'off' });
     expect(resolveProfile({ ...timedStory(), profile: { clock: 'timed', travel: 'free' } }))
-      .toEqual({ clock: 'timed', travel: 'free' });
+      .toEqual({ clock: 'timed', travel: 'free', investigation: 'off' });
   });
 });

@@ -28,6 +28,7 @@ function clockReadingHits(story: Story): { op: string; where: string }[] {
   for (const n of story.nodes) {
     scan(n.conditions, `node ${n.id}`);
     for (const ch of n.choices ?? []) scan(ch.conditions, `choice ${ch.id}`);
+    for (const ex of n.examinables ?? []) scan(ex.conditions, `examinable ${ex.id}`);
   }
   for (const ev of story.events) scan(ev.trigger, `event ${ev.id}`);
   for (const en of story.endings) scan(en.conditions, `ending ${en.id}`);
@@ -61,7 +62,16 @@ export const travelDimension: Dimension = {
   validate: () => [],
 };
 
-const DIMENSIONS: Dimension[] = [clockDimension, travelDimension];
+export const investigationDimension: Dimension = {
+  id: 'investigation',
+  values: ['off', 'on'],
+  default: 'off',
+  // Investigation's lints (fence + hygiene) live in investigationLint.ts, called from lintStory — the
+  // Dimension.validate hook is error-only and lacks lint context, same pattern as travel.
+  validate: () => [],
+};
+
+const DIMENSIONS: Dimension[] = [clockDimension, travelDimension, investigationDimension];
 
 // Derived from the dimensions' defaults so it can never drift from them.
 export const DEFAULT_PROFILE: Profile = Object.fromEntries(DIMENSIONS.map((d) => [d.id, d.default])) as unknown as Profile;

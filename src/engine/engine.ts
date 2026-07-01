@@ -9,6 +9,7 @@ import { buildBounds, type BoundsMap } from './bounds';
 import { applyResourceStep } from './resources';
 import { resolveProfile } from './profile';
 import { parseTravelDest, hubLocation, travelDests, travelTripEffects, destDefaultNode, travelChoiceId } from './travel';
+import { parseExamineTarget, examinablesAt, examineChoiceId, examineEffects } from './investigation';
 import type { Profile } from './types';
 
 export class GameEngine {
@@ -46,23 +47,24 @@ export class GameEngine {
     if (!this.state.visited.includes(id)) {
       this.state = { ...this.state, visited: [...this.state.visited, id] };
     }
-    // Scheduled events fire from world-time, judged at the node we have fully arrived at
-    // (after entry effects) so any clock advance — choice OR entry effect — is seen exactly
-    // once. checkScheduledEvents marks each fired event completed, so the recursive re-entry
-    // a "present" event triggers cannot re-fire it.
+    this.settle(id);
+  }
+
+  // The post-arrival tail, reusable by examine (which advances time in place and must run events/resources/
+  // ending resolution WITHOUT re-applying entryEffects or re-marking visited). Distinct from GameRunner.settle.
+  private settle(id: string): void {
+    const n = this.node(id);
+    // Scheduled events fire from world-time, judged after entry effects so any clock advance is seen once.
     const res = checkScheduledEvents(this.state, this.story, this.bounds);
     this.state = res.state;
     if (res.log.length) this.log.push(...res.log);
     if (res.routedNodeId && res.routedNodeId !== id) {
-      this.enter(res.routedNodeId);
+      this.enter(res.routedNodeId);   // a present event legitimately MOVES the player: full enter of the routed node
       return;
     }
-    // Resource depletion + at-zero, after any clock advance is settled at this node.
     const rstep = applyResourceStep(this.state, this.story, this.startTime);
     this.state = rstep.state;
     if (rstep.log.length) this.log.push(...rstep.log);
-    // Unified ending resolution (A3): node-named (F8) > priority[state + atZero] (H3) > out-of-time (H4)
-    // > default. atZero no longer short-circuits — it competes by priority with state-matched endings.
     const pastDeadline = this.state.time >= this.deadline;
     if (!this.ending && (n.resolvesEnding || n.endsWith || rstep.atZeroEndingId || pastDeadline)) {
       this.ending = resolveEndingAt(this.state, this.story, n, rstep.atZeroEndingId, pastDeadline);
@@ -91,6 +93,11 @@ export class GameEngine {
         }
       }
     }
+    if (this.profile.investigation === 'on' && !this.ending) {
+      for (const ex of examinablesAt(n, this.state)) {
+        choices.push({ id: examineChoiceId(ex.id), label: ex.label, available: true });
+      }
+    }
     return {
       node: n,
       time: this.state.time,
@@ -107,6 +114,8 @@ export class GameEngine {
     if (this.ending) return this.view();
     const dest = parseTravelDest(choiceId);
     if (dest !== undefined) return this.travelTo(dest);
+    const exTarget = parseExamineTarget(choiceId);
+    if (exTarget !== undefined) return this.examine(exTarget);
     const n = this.node(this.currentId);
     const choice = (n.choices || []).find((c) => c.id === choiceId);
     if (!choice) throw new Error(`Unknown choice: ${choiceId}`);
@@ -115,6 +124,17 @@ export class GameEngine {
     }
     this.state = applyEffects(this.state, choice.effects, this.bounds);
     this.enter(choice.destination);
+    return this.view();
+  }
+
+  private examine(targetId: string): GameView {
+    if (this.profile.investigation !== 'on') throw new Error(`Investigation is off; cannot examine ${targetId}`);
+    const n = this.node(this.currentId);
+    const ex = examinablesAt(n, this.state).find((e) => e.id === targetId);
+    if (!ex) throw new Error(`No available examinable '${targetId}' at node ${this.currentId}`);
+    this.state = applyEffects(this.state, examineEffects(ex), this.bounds);
+    this.log.push(ex.reveal);
+    this.settle(this.currentId);  // run events/resources/deadline tail WITHOUT re-arriving the node
     return this.view();
   }
 

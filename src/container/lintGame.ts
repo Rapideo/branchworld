@@ -52,11 +52,6 @@ export function lintGame(game: Game): { ok: boolean; errors: LintIssue[]; warnin
       errors.push({ level: 'error', code: 'ROAM_CARRY_UNVERIFIABLE',
         message: `chapter ${ch.id} is travel:'free' inside a ${game.chapters.length}-chapter game — multi-chapter roam is unsupported in v1 (keep roam games single-chapter)`, where: ch.id });
     }
-    // the engine reads only story.profile at runtime; inheriting travel from the game alone would silently not roam.
-    if (resolveProfile(ch.story).travel !== 'free') {
-      errors.push({ level: 'error', code: 'ROAM_CHAPTER_PROFILE_MISSING',
-        message: `chapter ${ch.id} resolves travel:'free' only via the game profile; declare travel:'free' in the chapter's own story.profile (the engine reads story.profile at runtime)`, where: ch.id });
-    }
   }
 
   // reachability from start

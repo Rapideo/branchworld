@@ -221,13 +221,13 @@ export const roamExample: Game = {
 };
 ```
 
-Also declare `travel:'free'` directly in the chapter's own `story.profile`. The engine reads `story.profile` at runtime — inheriting `travel` from the game profile alone silently does not roam at runtime, and the container linter fires `ROAM_CHAPTER_PROFILE_MISSING`.
+Declaring `travel:'free'` directly in the chapter's own `story.profile` is recommended for clarity but no longer required for correctness — the resolved game profile is stamped onto the chapter's story at runtime by `seedChapterStory`, so a game-profile-only roam chapter lints clean and roams. Declaring it locally keeps the story self-describing when read in isolation.
 
 ```typescript
-// Required on the story, not just the game
+// Recommended for clarity (the game profile is stamped on at runtime regardless)
 const roamStory: Story = {
   ...
-  profile: { clock: 'untimed', travel: 'free' },  // ← must be here
+  profile: { clock: 'untimed', travel: 'free' },
 };
 ```
 

@@ -225,7 +225,7 @@ examinables: [
 // Wherever you set the guard (e.g., entryEffects of the examine node or a choice effect)
 effects: [
   { field: 'desk_searched', op: 'set', value: 'true' },
-  { field: 'debt_receipt',  op: 'remove_clue' },
+  { field: 'clues', op: 'remove_clue', value: 'debt_receipt' },
 ],
 ```
 

@@ -41,4 +41,24 @@ describe('verifyInvestigation', () => {
     expect(ok).toBe(false);
     expect(issues.find((i) => i.code === 'INVESTIGATION_DEADLINE_UNREACHABLE')).toBeDefined();
   });
+
+  it('does NOT falsely pass when the win clues hold but the win never actually resolves (shadow/pin over-count)', () => {
+    // Examine gives clue X in time; the accuse node PINS the default 'dud' via endsWith, so the clue-gated 'win'
+    // (has_clue X) never actually resolves anywhere — even though X is held at the within-deadline terminal.
+    const s: Story = {
+      id: 's', title: 'S', startNodeId: 'study', startTime: '09:00', deadline: '10:00', startLocation: 'L',
+      profile: { clock: 'timed', investigation: 'on' }, variables: [],
+      nodes: [
+        { id: 'study', title: '', body: '', examinables: [{ id: 'desk', label: 'Desk', clue: 'x', reveal: 'r', minutes: 10 }],
+          choices: [{ id: 'accuse', label: 'Accuse', destination: 'verdict' }] },
+        { id: 'verdict', title: '', body: '', choices: [], endsWith: 'dud' },
+      ],
+      locations: [{ id: 'L', name: 'L' }], events: [],
+      endings: [
+        { id: 'win', name: 'W', conditions: [{ field: 'x', op: 'has_clue' }], priority: 1, summary: '' },
+        { id: 'dud', name: 'D', conditions: [], summary: '', isDefault: true },
+      ],
+    };
+    expect(verifyInvestigation(s).ok).toBe(false);   // win never resolves -> not completable
+  });
 });

@@ -54,7 +54,11 @@ function keyOf(n: WNode, timeKey: number): string {
 
 // Effective time component: any untimed walk drops time (A<->A dedups); else raw, or bucketed when a bucket is given.
 function timeKeyFor(n: WNode, roam: boolean, untimed: boolean, timeBucket?: number): number {
-  if (untimed) return 0;   // untimed forbids clock-reading conditions, so nothing branches on time — drop it always
+  // untimed forbids ALL four ways time could affect forward behavior — clock-reading conditions
+  // (PROFILE_UNTIMED_HAS_TIME_CONDITION), a deadline (PROFILE_UNTIMED_HAS_DEADLINE), an out-of-time ending
+  // (PROFILE_UNTIMED_HAS_OOT_ENDING), and time-driven depleting resources (PROFILE_UNTIMED_HAS_TIME_RESOURCE) —
+  // so under untimed nothing branches on `time`; drop it always (A<->A dedups).
+  if (untimed) return 0;
   const t = n.snap.state.time;
   return timeBucket ? Math.floor(t / timeBucket) : t;
 }
@@ -214,12 +218,17 @@ function computeSatisfiedEndings(w: WalkResult): string[] {
   // win-terminal and certify a game whose ONLY win is past the deadline. Boundary is <= (a win on the buzzer
   // counts; strictly after does not). Untimed -> Infinity -> no terminal filtered (completable short-circuits anyway).
   const deadline = w.story.deadline !== undefined ? parseTime(w.story.deadline) : Infinity;
-  const nonDefault = w.story.endings.filter((e) => !e.isDefault);
+  const byId = new Map(w.story.endings.map((e) => [e.id, e]));
   const sat = new Set<string>();
   for (const t of w.terminals) {
-    if (t.snap.state.time > deadline) continue;
-    for (const e of nonDefault)
-      if (evaluateConditions(e.conditions, t.snap.state)) sat.add(e.id);
+    if (t.snap.state.time > deadline) continue;   // within-deadline terminals only (the P0 filter)
+    const eid = t.snap.endingId;                  // the ending the engine ACTUALLY resolved at this terminal
+    if (!eid) continue;
+    const e = byId.get(eid);
+    // Genuinely satisfied iff a NON-DEFAULT ending actually resolves here AND its own conditions hold at the
+    // terminal. endingId-match defeats a shadow/pin that never lets the clue-gated win resolve; conditions-hold
+    // defeats an endsWith pin that resolves the ending with its gate unmet (the P0 endsWith leak).
+    if (e && !e.isDefault && evaluateConditions(e.conditions, t.snap.state)) sat.add(eid);
   }
   return [...sat];
 }
